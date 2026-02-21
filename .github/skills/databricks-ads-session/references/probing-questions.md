@@ -152,3 +152,65 @@ Load this file when the user gives vague or incomplete answers during the ADS co
 - "Everyone has access to everything." Unity Catalog access controls will be a change management effort.
 - No data ownership model. Recommend establishing one before building the platform.
 - "Governance later" in a regulated industry. Flag as a compliance risk.
+
+---
+
+## ML & AI Workloads
+
+**Context**: User mentions "machine learning" or "AI" without distinguishing classical ML from GenAI, or is vague about ML maturity.
+
+**Progressive Questions**:
+1. "What type of ML workloads: supervised learning (classification, regression), unsupervised (clustering, anomaly detection), or deep learning (NLP, computer vision)?"
+2. "How mature is your ML practice: ad-hoc notebooks, or structured MLOps with CI/CD, model registry, and automated retraining?"
+3. "Do you need GPU compute for training? What frameworks — PyTorch, TensorFlow, scikit-learn, XGBoost?"
+4. "How are models served today: batch scoring, real-time API endpoints, or embedded in applications?"
+5. "Do you need a Feature Store for shared feature engineering across models?"
+6. "How do you monitor model performance today — drift detection, accuracy degradation, data quality checks?"
+7. "What is the scale: how many models in production, and how frequently do they retrain?"
+
+**Red Flags**:
+- "We want to do AI" without a specific use case. Push for concrete business problems.
+- No model monitoring. Flag: production ML without observability leads to silent model degradation.
+- Training on full datasets without feature engineering. Recommend Feature Store for reusability.
+
+---
+
+## GenAI & AI Agents
+
+**Context**: User mentions "chatbot", "RAG", "LLM", "copilot", "AI agent", "document search", or "generative AI" — or you suspect GenAI needs based on business problem.
+
+**Progressive Questions**:
+1. "What is the primary GenAI use case: internal knowledge assistant, customer-facing chatbot, document extraction, code generation, or something else?"
+2. "What knowledge sources will the AI need access to: internal documents, databases, wikis, APIs, or external data?"
+3. "What LLM provider are you considering: Azure OpenAI (GPT-4), open-source models (Llama, Mistral, DBRX), or a mix?"
+4. "Do you need multi-turn conversational agents (that remember context across messages), or single-shot Q&A?"
+5. "How many users will interact with the AI: dozens (internal tool) or thousands (customer-facing)?"
+6. "Are there data sensitivity concerns — can user queries or AI responses contain PII? Do you need guardrails on outputs?"
+7. "Do you need AI agents that can take actions (call APIs, query databases, trigger workflows), or is retrieval-only sufficient?"
+8. "How will you evaluate AI quality: human review, automated evaluation metrics, A/B testing?"
+
+**Red Flags**:
+- "We want to use ChatGPT for everything." Probe for specific use cases — most benefit from RAG over raw LLM.
+- No data governance plan for AI. LLM access to sensitive data without guardrails is a compliance risk.
+- "We need real-time RAG over 10M documents" without vector search infrastructure. Size the Vector Search index.
+- No evaluation strategy. Without measurement, you cannot tell if the AI is actually useful.
+
+---
+
+## Data Applications & Serving
+
+**Context**: User mentions building internal tools, data apps, web interfaces, or serving data to applications beyond BI dashboards.
+
+**Progressive Questions**:
+1. "What type of data application: internal dashboard, customer-facing portal, API endpoint, or embedded analytics?"
+2. "What framework does your team prefer: Streamlit, Gradio, Dash, Flask, React?"
+3. "How many concurrent users will the application serve?"
+4. "Does the application need real-time data, or can it work with periodically refreshed data?"
+5. "What authentication is required: internal SSO (Entra ID), customer login, API keys?"
+6. "Does the application need to write back to the data platform (e.g., user feedback, annotations, approvals)?"
+7. "Do you need low-latency point lookups (single-record access in <10ms), or is analytical query speed (seconds) sufficient?"
+
+**Red Flags**:
+- "We will build our own hosting." Evaluate Databricks Apps first — serverless, integrated with Unity Catalog, no infra to manage.
+- Sub-10ms latency requirement for point lookups. This signals a need for Lakebase (serverless OLTP) or Cosmos DB, not SQL Warehouse.
+- Application needs to serve external customers with high availability. Probe DR requirements and SLA targets.

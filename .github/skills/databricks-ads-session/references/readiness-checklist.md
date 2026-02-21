@@ -38,7 +38,7 @@ Generate with stated assumptions if missing after 1 follow-up attempt. Always do
 | **Real-time vs batch split** | Determines whether streaming infrastructure is needed | 80% batch, 20% real-time | "What percentage of your workloads need real-time processing vs daily/hourly batch?" |
 | **Compliance requirements** | Affects encryption, audit, network isolation, data residency | No specific compliance beyond standard security | "Are there regulatory frameworks you must comply with — HIPAA, SOC2, GDPR?" |
 | **BI tool and concurrency** | Sizes SQL Warehouse, determines caching strategy | Power BI, 10-20 concurrent users | "What BI tool will you use, and how many concurrent users?" |
-| **Pipeline orchestration** | Determines ADF vs Databricks Workflows vs external tools | Databricks Workflows for jobs, ADF for external source ingestion | "How do you orchestrate data pipelines today — Airflow, ADF, cron jobs?" |
+| **Pipeline orchestration** | Determines LakeFlow Jobs vs ADF vs external tools | LakeFlow Jobs for Databricks-native, ADF for external source ingestion | "How do you orchestrate data pipelines today — Airflow, ADF, cron jobs?" |
 
 ## Nice-to-Have Items
 
@@ -48,13 +48,18 @@ Use sensible defaults without asking. Only probe if the conversation naturally r
 |------|-------------------|-----------------|
 | **Workspace SKU** | Premium (required for Unity Catalog) | User mentions cost as primary concern → consider Standard for dev |
 | **Monitoring tools** | Azure Monitor + Databricks system tables | User mentions Datadog, Splunk, Grafana → add integration |
-| **CI/CD tooling** | Azure DevOps Pipelines | User mentions GitHub Actions, GitLab CI → adjust |
-| **Cost optimization** | Standard autoscaling, no reserved capacity | User mentions budget constraints → add spot instances, auto-terminate |
+| **CI/CD tooling** | Azure DevOps Pipelines + DABs | User mentions GitHub Actions, GitLab CI → adjust |
+| **Cost optimization** | Standard autoscaling, serverless compute, no reserved capacity | User mentions budget constraints → add spot instances, auto-terminate |
 | **Tagging strategy** | Environment + team + cost-center tags | User has existing tagging policy → adopt it |
 | **Cluster policies** | Restrict max workers, enforce auto-terminate | User has specific governance needs → customize |
 | **Secret management** | Databricks secrets backed by Azure Key Vault | User has existing vault → integrate |
 | **Disaster recovery** | Single-region, workspace backup | User needs multi-region → add replication design |
-| **Delta Lake optimization** | Z-ORDER on common filter columns, OPTIMIZE daily | User mentions specific performance issues → tune |
+| **Delta Lake optimization** | Liquid Clustering (CLUSTER BY AUTO), OPTIMIZE daily | User mentions specific performance issues → tune clustering keys |
+| **GenAI use case scope** | Not applicable (no GenAI) | User mentions chatbot, RAG, agents, LLM → probe knowledge sources, LLM choice, guardrails |
+| **LLM provider preference** | Azure OpenAI (GPT-4) | User mentions open-source models → add DBRX/Llama/Mistral via Model Serving |
+| **AI agent complexity** | Single-shot RAG Q&A | User needs multi-turn agents, tool calling, or workflows → add Mosaic AI Agent Framework |
+| **Data application hosting** | No custom apps | User needs internal tools → add Databricks Apps; external-facing → add dedicated hosting |
+| **Lakebase / OLTP needs** | Not needed (analytical only) | User needs <10ms point lookups or OLTP → add Lakebase |
 
 ## Pre-Generation Summary Template
 

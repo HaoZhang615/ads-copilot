@@ -5,7 +5,7 @@ license: MIT
 compatibility: Works with Claude Code, GitHub Copilot, VS Code, Cursor, and any Agent Skills compatible tool. PNG export requires Node.js (npx @mermaid-js/mermaid-cli). Fallback is Mermaid in Markdown preview.
 metadata:
   author: community
-  version: "1.0"
+  version: "2.0"
 ---
 
 # Azure Databricks ADS Session
@@ -58,12 +58,14 @@ Identify what the platform needs to do.
 
 Ask about:
 - ETL/ELT pipelines (complexity, frequency, SLAs)
-- ML/AI workloads (training, inference, MLOps maturity)
+- ML/AI workloads (training, inference, MLOps maturity, Mosaic AI)
+- GenAI applications (RAG, chatbots, AI agents, document intelligence)
 - BI/reporting (tools, user count, concurrency)
 - Streaming/real-time analytics requirements
 - SQL analytics workloads (ad-hoc queries, dashboards)
+- Data application hosting needs (Databricks Apps, custom UIs)
 - Notebook/interactive development needs
-- CI/CD and DevOps practices for data engineering
+- CI/CD and DevOps practices for data engineering (DABs, Azure DevOps, GitHub Actions)
 
 ### Phase 4: Security & Networking (1-3 turns)
 
@@ -119,11 +121,13 @@ Common patterns:
 |----------|---------|
 | Data lakehouse (general) | Medallion architecture with Unity Catalog |
 | On-prem migration | Lift-and-shift → modernize with Delta Lake |
-| Real-time analytics | Structured Streaming + Delta Live Tables |
-| ML/AI platform | Feature Store + MLflow + Model Serving |
-| Data warehouse replacement | SQL Warehouse + dbt + BI tools |
+| Real-time analytics | Structured Streaming + LakeFlow Declarative Pipelines |
+| ML/AI platform | Feature Store + MLflow 3.0 + Mosaic AI + Model Serving |
+| GenAI / AI agents | Mosaic AI Agent Framework + Vector Search + AI Gateway |
+| Data warehouse replacement | SQL Warehouse + dbt + Lakehouse Federation |
 | IoT data platform | Event Hubs → Databricks Streaming → Delta |
-| Multi-team data mesh | Unity Catalog + workspace per domain |
+| Multi-team data mesh | Unity Catalog + workspace per domain + Delta Sharing |
+| Hybrid batch + streaming | LakeFlow Connect + LakeFlow Jobs + Structured Streaming |
 
 ### Generate the Diagram
 

@@ -18,13 +18,16 @@ Detect these keywords early in the conversation and adapt the interview path acc
 |-------------|-------------------|
 | "migration", "Hadoop", "Teradata", "on-prem" | Emphasize source system discovery in Phase 2. Load `migration-patterns.md`. |
 | "Kafka", "streaming", "real-time", "events" | Prioritize latency requirements in Phase 3. Steer toward streaming patterns. |
-| "machine learning", "AI", "models", "predictions" | Deep-dive ML maturity in Phase 3. Probe MLOps, feature engineering. |
+| "machine learning", "AI", "models", "predictions" | Deep-dive ML maturity in Phase 3. Probe MLOps, feature engineering, Mosaic AI. |
+| "GenAI", "LLM", "RAG", "chatbot", "agent", "copilot", "GPT" | Steer toward Pattern 9 (GenAI). Probe knowledge sources, LLM choice, agent complexity. |
 | "compliance", "HIPAA", "SOC2", "GDPR", "FedRAMP" | Expand Phase 4 to 3 turns. Probe encryption, audit, data residency. |
 | "dashboard", "Power BI", "Tableau", "reports" | Focus Phase 3 on BI concurrency, data freshness, semantic layer. |
 | "IoT", "sensors", "telemetry", "devices" | Load `industry-templates.md` (Manufacturing/IoT). Probe device count, message frequency. |
 | Industry name (retail, healthcare, finance, etc.) | Load `industry-templates.md` for the relevant vertical. |
 | "cost", "budget", "cheap", "expensive" | Note cost sensitivity. Expand Phase 5 cost discussion. |
 | "dbt", "Airflow", "Spark" | Note existing tooling. Probe integration needs in Phase 3. |
+| "LakeFlow", "DLT", "Delta Live Tables" | Note familiarity with Databricks-native ingestion. Probe LakeFlow Connect vs ADF. |
+| "Databricks Apps", "Streamlit", "Gradio" | Note application-layer requirements. Probe hosting, authentication needs. |
 
 ---
 
@@ -81,11 +84,13 @@ Detect these keywords early in the conversation and adapt the interview path acc
 4. "How do you manage data governance today? Is there a data catalog, access policies, or ownership model?"
 5. "What's your data growth trajectory? Is volume steady, or do you expect significant growth?"
 6. "Is any of this data sensitive — PII, PHI, financial records?"
+7. "Do you have unstructured data — documents, PDFs, images, audio — that needs to be searchable or processed by AI?"
 
 ### Adaptive Behavior
 - Migration signal detected: "What does the schema look like on the source system? How many tables, databases?"
 - Streaming signal detected: "What message format — JSON, Avro, Protobuf? What's the event rate per second?"
 - IoT signal detected: "How many devices? What's the message frequency? Is there edge processing?"
+- GenAI signal detected: "What knowledge sources would AI agents need access to? Documents, wikis, databases?"
 
 ### Transition
 "I now understand where your data comes from and how much of it there is. Let me dig into what you need to do with this data — the actual workloads."
@@ -107,19 +112,24 @@ Detect these keywords early in the conversation and adapt the interview path acc
 
 ### Core Questions
 
-1. "What are the primary things you need to do with this data? ETL pipelines, machine learning, dashboards, ad-hoc queries?"
+1. "What are the primary things you need to do with this data? ETL pipelines, machine learning, dashboards, ad-hoc queries, GenAI applications?"
 2. "How many data engineers, data scientists, and analysts will use the platform?"
    - Follow-up: "Will they work in notebooks, SQL, or both?"
 3. "What are your pipeline SLAs? For example, must data be ready for dashboards by 7 AM?"
 4. "What BI tools do you use or plan to use? Power BI, Tableau, Looker, custom apps?"
    - Follow-up: "How many concurrent dashboard users?"
 5. "Do you have ML/AI workloads? If so, what's your MLOps maturity — ad-hoc notebooks, or structured training/deployment pipelines?"
-6. "What CI/CD and DevOps practices does your data team use today?"
+6. "Are you building or planning any GenAI applications — chatbots, document search, AI agents, copilots?"
+   - Follow-up: "What LLM provider are you considering — Azure OpenAI, open-source models, or both?"
+7. "What CI/CD and DevOps practices does your data team use today?"
+8. "Do you need to host data applications or internal tools on the platform — dashboards, web apps, APIs?"
 
 ### Adaptive Behavior
-- ML signal detected: "Do you need a Feature Store? Online serving for real-time predictions? GPU clusters?"
+- ML signal detected: "Do you need a Feature Store? Online serving for real-time predictions? GPU clusters? Mosaic AI capabilities?"
+- GenAI signal detected: "How many knowledge sources need to be indexed? What's the expected query volume? Do you need multi-turn agent conversations or single-shot Q&A?"
 - BI-heavy signal: "Do you need a semantic layer (e.g., dbt metrics)? What's the query concurrency target?"
 - Streaming signal: "What end-to-end latency target — seconds, minutes? Do you need exactly-once processing?"
+- App-building signal: "What framework — Streamlit, Gradio, Dash, React? How many concurrent app users?"
 
 ### Transition
 "Now I know what the platform needs to do. Let me make sure the architecture meets your security and networking requirements."
@@ -128,6 +138,7 @@ Detect these keywords early in the conversation and adapt the interview path acc
 - Do NOT assume notebook-only workflows. Many enterprises need production job scheduling.
 - Do NOT skip CI/CD questions — it affects workspace and repo design.
 - Do NOT conflate "real-time BI" with "streaming ETL" — probe to distinguish.
+- Do NOT assume "AI" means GenAI. Clarify: classical ML (predictions, classification) vs generative AI (RAG, agents, LLMs).
 
 ---
 
@@ -147,6 +158,7 @@ Detect these keywords early in the conversation and adapt the interview path acc
 3. "What compliance frameworks apply? HIPAA, SOC2, GDPR, FedRAMP, PCI-DSS?"
 4. "Do you need data encryption with customer-managed keys, or is Microsoft-managed encryption sufficient?"
 5. "How granular does data access control need to be? Table-level, row-level, column-level masking?"
+6. "For GenAI workloads: do you need PII filtering on LLM inputs/outputs, or guardrails on model responses?"
 
 ### Adaptive Behavior
 - Compliance-heavy signal: Expand to 3 turns. Probe audit logging, data residency, retention policies.
@@ -177,12 +189,13 @@ Detect these keywords early in the conversation and adapt the interview path acc
    - Follow-up: "What's an acceptable RPO (data loss) and RTO (downtime)?"
 2. "How many environments do you need? Dev, staging, production? Separate workspaces per environment?"
 3. "What monitoring and alerting do you use today? Azure Monitor, Datadog, Splunk?"
-4. "Are there specific cost optimization priorities? Reserved capacity, spot instances, auto-scaling?"
+4. "Are there specific cost optimization priorities? Reserved capacity, spot instances, auto-scaling, serverless compute?"
 
 ### Adaptive Behavior
-- Enterprise signal: Probe tagging strategy, cost allocation, chargeback model.
-- Startup/small team: Suggest simplified setup — single workspace with environment folders.
+- Enterprise signal: Probe tagging strategy, cost allocation, chargeback model, DABs for CI/CD.
+- Startup/small team: Suggest simplified setup — single workspace with environment folders, serverless compute.
 - Multi-region: Probe data sovereignty and replication requirements.
+- GenAI workloads: Probe LLM cost management — AI Gateway rate limiting, model routing, token budgets.
 
 ### Transition
 "I now have a comprehensive picture of your requirements. Let me summarize what I've gathered and propose an architecture."
@@ -205,7 +218,7 @@ Detect these keywords early in the conversation and adapt the interview path acc
 
 1. Summarize all gathered requirements in a structured format. Present this to the user: "Here's what I've gathered — please confirm or correct."
 2. Select the architecture pattern from `databricks-patterns.md` that best matches the requirements.
-3. If multiple patterns apply, combine them (e.g., Medallion + Streaming, ML Platform + Data Mesh).
+3. If multiple patterns apply, combine them (e.g., Medallion + Streaming, ML Platform + GenAI, Data Mesh + GenAI).
 4. Map requirements to specific Azure components.
 5. Generate the diagram using `scripts/generate_architecture.py` or the `azure-diagrams` skill.
 6. Present the diagram with a brief explanation of component choices.

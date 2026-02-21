@@ -2,7 +2,7 @@
 """
 Azure Databricks Architecture Diagram Generator (Mermaid)
 
-Generates Mermaid flowchart syntax for architecture diagrams. Supports 8
+Generates Mermaid flowchart syntax for architecture diagrams. Supports 9
 Databricks architecture patterns. Optionally renders to PNG via mermaid-cli.
 
 Usage:
@@ -10,6 +10,7 @@ Usage:
     python generate_architecture.py --pattern medallion
     python generate_architecture.py --pattern medallion --name "Contoso Lakehouse"
     python generate_architecture.py --pattern ml-platform --params '{"include_monitoring": true}'
+    python generate_architecture.py --pattern genai --params '{"include_evaluation": true}'
     python generate_architecture.py --pattern medallion --render --filename contoso
 
 Output: Mermaid code to stdout (or to .mmd file + PNG when using --render).
@@ -35,7 +36,8 @@ from typing import Any, Dict
 #    - dwh-replacement              (line ~345)
 #    - iot                          (line ~405)
 #    - hybrid                       (line ~465)
-# 2. Pattern Registry & CLI        (line ~540)
+#    - genai                        (line ~530)
+# 2. Pattern Registry & CLI        (line ~600)
 # ---------------------------------------------------------------------------
 
 
@@ -72,7 +74,7 @@ def generate_medallion(params: Dict[str, Any]) -> str:
             API[REST APIs]
           end
 
-          ADF[Azure Data Factory]
+          LFC[LakeFlow Connect]
 
           subgraph DBX["Databricks Workspace"]
             UC[Unity Catalog]
@@ -93,7 +95,7 @@ def generate_medallion(params: Dict[str, Any]) -> str:
         {security_nodes}
           BI[{bi_tool}]
 
-          SQL & FILES & API --> ADF --> B_INGEST --> B_TABLES
+          SQL & FILES & API --> LFC --> B_INGEST --> B_TABLES
           B_TABLES --> S_CLEAN --> S_TABLES
           S_TABLES --> G_AGG --> G_TABLES
           G_TABLES --> SQLWH --> BI
@@ -102,7 +104,7 @@ def generate_medallion(params: Dict[str, Any]) -> str:
 
 
 def generate_streaming(params: Dict[str, Any]) -> str:
-    """Streaming Lakehouse with Event Hubs and Delta Live Tables."""
+    """Streaming Lakehouse with Event Hubs and LakeFlow Declarative Pipelines."""
     include_serving_layer = params.get("include_serving_layer", True)
 
     serving_node = ""
@@ -124,7 +126,7 @@ def generate_streaming(params: Dict[str, Any]) -> str:
           subgraph DBX["Databricks Workspace"]
             SS[Structured Streaming]
             UC[Unity Catalog]
-            subgraph DLT["Delta Live Tables Pipeline"]
+            subgraph LDP["LakeFlow Declarative Pipelines"]
               BRONZE[(Bronze - Raw)]
               SILVER[(Silver - Validated)]
               GOLD[(Gold - Aggregated)]
@@ -146,7 +148,7 @@ def generate_streaming(params: Dict[str, Any]) -> str:
 
 
 def generate_ml_platform(params: Dict[str, Any]) -> str:
-    """ML Platform with Feature Store, MLflow, and Model Serving."""
+    """ML & AI Platform with Feature Store, MLflow 3.0, and Model Serving."""
     include_monitoring = params.get("include_monitoring", True)
 
     monitor_nodes = ""
@@ -155,13 +157,14 @@ def generate_ml_platform(params: Dict[str, Any]) -> str:
         monitor_nodes = textwrap.dedent("""\
 
           subgraph OBS["Observability"]
-            MONITOR[Azure Monitor]
+            INFERENCE[(Inference Tables)]
+            MONITOR[Lakehouse Monitoring]
             DRIFT[Drift Detection]
           end
         """)
         monitor_edges = textwrap.dedent("""\
-          SERVING --> MONITOR
-          SERVING --> DRIFT
+          SERVING --> INFERENCE --> MONITOR
+          MONITOR --> DRIFT
           DRIFT -.->|retrain| TRAINING
         """)
 
@@ -177,23 +180,25 @@ def generate_ml_platform(params: Dict[str, Any]) -> str:
             end
             subgraph MT["Model Training"]
               TRAINING[Training Clusters]
-              MLFLOW[MLflow Experiments]
+              MLFLOW[MLflow 3.0 Experiments]
             end
-            REGISTRY[Model Registry]
+            REGISTRY[Model Registry - UC]
+            GATEWAY[Mosaic AI Gateway]
             SERVING[Model Serving - Serverless]
           end
         {monitor_nodes}
           subgraph MLOPS["MLOps"]
-            CICD[Azure DevOps]
+            DABS[DABs + CI/CD]
             NOTEBOOKS[Repos / Notebooks]
           end
 
-          APPS[Applications / APIs]
+          APPS[Databricks Apps / APIs]
 
           ADLS --> DELTA --> FEAT_ENG --> FEAT_STORE
           FEAT_STORE --> TRAINING --> MLFLOW
           MLFLOW --> REGISTRY --> SERVING --> APPS
-          CICD --> NOTEBOOKS --> TRAINING
+          SERVING --> GATEWAY
+          DABS --> NOTEBOOKS --> TRAINING
         {monitor_edges}""")
 
 
@@ -215,7 +220,7 @@ def generate_data_mesh(params: Dict[str, Any]) -> str:
 
     share_edge = ""
     if len(domains) >= 2:
-        share_edge = "    PROD_D0 -.->|share| WS_D1"
+        share_edge = "    PROD_D0 -.->|Delta Sharing| WS_D1"
 
     domain_subgraph_block = "\n        ".join(domain_subgraphs)
     domain_edge_block = "\n".join(domain_edges)
@@ -227,6 +232,7 @@ def generate_data_mesh(params: Dict[str, Any]) -> str:
             ENTRA(Microsoft Entra ID)
             MARKETPLACE[Data Marketplace]
             GOVERNANCE[Governance Policies]
+            FED[Lakehouse Federation]
           end
 
           subgraph DOMAINS["Domain Workspaces"]
@@ -238,6 +244,10 @@ def generate_data_mesh(params: Dict[str, Any]) -> str:
             KV(Azure Key Vault)
           end
 
+          subgraph EXT["External Sources"]
+            EXT_DB[[External Databases]]
+          end
+
           subgraph CONSUME["Consumers"]
             SQLWH[SQL Warehouse]
             PBI[Power BI]
@@ -245,6 +255,7 @@ def generate_data_mesh(params: Dict[str, Any]) -> str:
 
           ENTRA -.->|identity| UC
           UC --> GOVERNANCE
+          FED -.->|query| EXT_DB
         {domain_edge_block}
         {share_edge}
           MARKETPLACE --> SQLWH --> PBI
@@ -272,7 +283,7 @@ def generate_migration(params: Dict[str, Any]) -> str:
           end
 
           subgraph AZ["Azure Landing Zone"]
-            ADF[Data Factory - Migration Pipelines]
+            LFC[LakeFlow Connect - Migration]
             ADLS[(ADLS Gen2)]
 
             subgraph DBX["Databricks Workspace"]
@@ -281,6 +292,7 @@ def generate_migration(params: Dict[str, Any]) -> str:
               DELTA[(Delta Tables)]
               SQLWH[SQL Warehouse]
             end
+            DABS[DABs - Deployment]
           end
 
           subgraph SEC["Security"]
@@ -292,10 +304,11 @@ def generate_migration(params: Dict[str, Any]) -> str:
 
           HDFS & HIVE & SPARK ==> ER ==> VNET
           VNET --> FW --> PE
-          PE --> ADF --> ADLS --> INGEST --> DELTA --> SQLWH --> BI
+          PE --> LFC --> ADLS --> INGEST --> DELTA --> SQLWH --> BI
           UC -.->|governs| DELTA
           KV -.->|secrets| INGEST
           ENTRA -.->|RBAC| UC
+          DABS -.->|deploy| DBX
     """)
 
 
@@ -311,17 +324,18 @@ def generate_dwh_replacement(params: Dict[str, Any]) -> str:
             SSRS[SSRS Reports]
           end
 
-          ADF[Azure Data Factory]
+          LFC[LakeFlow Connect]
           ADLS[(ADLS Gen2)]
 
           subgraph DBX["Databricks Lakehouse"]
             subgraph ELT["ELT Pipelines"]
-              DLT[Delta Live Tables]
+              LDP[LakeFlow Declarative Pipelines]
               BRONZE[(Bronze)]
               SILVER[(Silver)]
               GOLD[(Gold)]
             end
             UC[Unity Catalog]
+            FED[Lakehouse Federation]
             subgraph SQLA["SQL Analytics"]
               SQLWH[SQL Warehouse - Serverless]
               SQLWH_PRO[SQL Warehouse - Pro]
@@ -339,12 +353,13 @@ def generate_dwh_replacement(params: Dict[str, Any]) -> str:
             TABLEAU[Tableau / Looker]
           end
 
-          DW_TABLES --> ADF --> ADLS --> DLT
-          DLT --> BRONZE --> SILVER --> GOLD
+          DW_TABLES --> LFC --> ADLS --> LDP
+          LDP --> BRONZE --> SILVER --> GOLD
+          FED -.->|query legacy| DW_TABLES
           UC -.->|governs| GOLD
           GOLD --> SQLWH --> PBI & EXCEL
           GOLD --> SQLWH_PRO --> TABLEAU
-          KV -.->|secrets| DLT
+          KV -.->|secrets| LDP
           ENTRA -.->|RBAC| UC
     """)
 
@@ -379,7 +394,7 @@ def generate_iot(params: Dict[str, Any]) -> str:
 
           subgraph DBX["Databricks Workspace"]
             SS[Structured Streaming]
-            subgraph DLT["Delta Live Tables"]
+            subgraph LDP["LakeFlow Declarative Pipelines"]
               RAW[(Raw Telemetry)]
               CLEAN[(Clean Readings)]
               AGG[(Aggregated Metrics)]
@@ -389,6 +404,7 @@ def generate_iot(params: Dict[str, Any]) -> str:
               PREDICT[Predictive Maintenance]
               SERVING[Model Serving]
             end
+            LAKEBASE[(Lakebase - Device State)]
           end
 
           ADLS[(ADLS Gen2)]
@@ -407,6 +423,7 @@ def generate_iot(params: Dict[str, Any]) -> str:
           AGG --> ADLS
           AGG --> SQLWH --> DASH
           SERVING --> ALERTS
+          CLEAN --> LAKEBASE
         {edge_extra}""")
 
 
@@ -426,13 +443,13 @@ def generate_hybrid(params: Dict[str, Any]) -> str:
             CLICK[Clickstream]
           end
 
-          ADF[Data Factory - Batch]
+          LFC[LakeFlow Connect - Batch]
           EH[Event Hubs - Streaming]
           ADLS[(ADLS Gen2)]
 
           subgraph DBX["Databricks Workspace"]
             subgraph BP["Batch Pipeline"]
-              BATCH_ELT[Batch ELT]
+              LF_JOBS[LakeFlow Jobs]
               B_BRONZE[(Bronze - Batch)]
               B_SILVER[(Silver - Batch)]
             end
@@ -456,18 +473,82 @@ def generate_hybrid(params: Dict[str, Any]) -> str:
           subgraph BI["Analytics & BI"]
             PBI[Power BI]
             ML_NB[ML Notebooks]
-            API[REST APIs]
+            DB_APPS[Databricks Apps]
           end
 
-          ERP & CRM & FILES --> ADF --> ADLS --> BATCH_ELT
-          BATCH_ELT --> B_BRONZE --> B_SILVER --> GOLD
+          ERP & CRM & FILES --> LFC --> ADLS --> LF_JOBS
+          LF_JOBS --> B_BRONZE --> B_SILVER --> GOLD
           APP_EVT & CLICK --> EH --> STREAM_INGEST
           STREAM_INGEST --> S_BRONZE --> S_SILVER --> GOLD
-          GOLD --> SQLWH --> PBI & ML_NB & API
+          GOLD --> SQLWH --> PBI & ML_NB & DB_APPS
           UC -.->|governs| GOLD
-          KV -.->|secrets| BATCH_ELT
+          KV -.->|secrets| LF_JOBS
           ENTRA -.->|RBAC| UC
     """)
+
+
+def generate_genai(params: Dict[str, Any]) -> str:
+    """GenAI & AI Agent Platform with Mosaic AI, Vector Search, and Agent Framework."""
+    include_evaluation = params.get("include_evaluation", True)
+    llm_provider = params.get("llm_provider", "Azure OpenAI")
+
+    eval_nodes = ""
+    eval_edges = ""
+    if include_evaluation:
+        eval_nodes = textwrap.dedent("""\
+
+          subgraph EVAL["Evaluation & Monitoring"]
+            AG_EVAL[Mosaic AI Agent Evaluation]
+            INF_TABLES[(Inference Tables)]
+            LH_MON[Lakehouse Monitoring]
+          end
+        """)
+        eval_edges = textwrap.dedent("""\
+          SERVING --> INF_TABLES --> LH_MON
+          LH_MON -.->|feedback| AG_EVAL
+        """)
+
+    return textwrap.dedent(f"""\
+        flowchart TB
+          subgraph DATA["Data Sources"]
+            DOCS[(Documents / PDFs)]
+            DELTA[(Delta Tables)]
+            API_DATA[APIs / Web]
+          end
+
+          subgraph LLM_PROVIDERS["LLM Providers"]
+            LLM[{llm_provider}]
+            OSS_LLM[OSS Models - DBRX / Llama]
+          end
+
+          subgraph DBX["Databricks AI Workspace"]
+            subgraph PREP["Data Preparation"]
+              CHUNK[Chunking / Embedding Pipelines]
+              VS[(Vector Search Index)]
+            end
+            subgraph AGENT["Agent Development"]
+              AF[Mosaic AI Agent Framework]
+              AB[Agent Bricks - No Code]
+              MLFLOW[MLflow 3.0 - Tracing]
+            end
+            GATEWAY[Mosaic AI Gateway]
+            UC[Unity Catalog]
+            SERVING[Model Serving - Serverless]
+          end
+        {eval_nodes}
+          subgraph CONSUME["Consumers"]
+            DB_APPS[Databricks Apps]
+            EXT_APP[External Applications]
+          end
+
+          DOCS & DELTA & API_DATA --> CHUNK --> VS
+          VS --> AF
+          AF --> MLFLOW --> SERVING
+          AB --> SERVING
+          LLM & OSS_LLM --> GATEWAY --> AF
+          SERVING --> DB_APPS & EXT_APP
+          UC -.->|governs| VS & SERVING
+        {eval_edges}""")
 
 
 # ---------------------------------------------------------------------------
@@ -482,38 +563,43 @@ PATTERNS = {
     },
     "streaming": {
         "fn": generate_streaming,
-        "desc": "Real-time streaming with Event Hubs and Delta Live Tables",
+        "desc": "Real-time streaming with Event Hubs and LakeFlow Declarative Pipelines",
         "params": "name, include_serving_layer (bool)",
     },
     "ml-platform": {
         "fn": generate_ml_platform,
-        "desc": "ML platform with Feature Store, MLflow, and Model Serving",
+        "desc": "ML & AI platform with Feature Store, MLflow 3.0, Mosaic AI Gateway",
         "params": "name, include_monitoring (bool)",
     },
     "data-mesh": {
         "fn": generate_data_mesh,
-        "desc": "Data Mesh with domain-oriented ownership and Unity Catalog",
+        "desc": "Data Mesh with domain-oriented ownership, Unity Catalog, and Lakehouse Federation",
         "params": 'name, domains (list of strings, e.g. ["Sales","Marketing"])',
     },
     "migration": {
         "fn": generate_migration,
-        "desc": "On-premises / legacy system migration to Databricks",
+        "desc": "On-premises / legacy system migration to Databricks with LakeFlow Connect",
         "params": "name, source_system (str)",
     },
     "dwh-replacement": {
         "fn": generate_dwh_replacement,
-        "desc": "Data warehouse replacement with Databricks SQL",
+        "desc": "Data warehouse replacement with Databricks SQL and Lakehouse Federation",
         "params": "name, legacy_dwh (str)",
     },
     "iot": {
         "fn": generate_iot,
-        "desc": "IoT analytics platform with streaming ingestion",
+        "desc": "IoT analytics platform with streaming ingestion and Lakebase",
         "params": "name, include_edge (bool)",
     },
     "hybrid": {
         "fn": generate_hybrid,
-        "desc": "Hybrid batch + streaming lakehouse architecture",
+        "desc": "Hybrid batch + streaming lakehouse with LakeFlow Jobs and Databricks Apps",
         "params": "name",
+    },
+    "genai": {
+        "fn": generate_genai,
+        "desc": "GenAI & AI Agent platform with Mosaic AI, Vector Search, Agent Framework",
+        "params": 'name, include_evaluation (bool), llm_provider (str, default "Azure OpenAI")',
     },
 }
 
