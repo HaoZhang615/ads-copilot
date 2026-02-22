@@ -46,7 +46,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const wsRef = useRef<WebSocketManager | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
   const sessionStateRef = useRef<SessionState>("idle");
-  const handleMessageRef = useRef<(msg: IncomingMessage) => void>();
+  const handleMessageRef = useRef<((msg: IncomingMessage) => void) | undefined>(undefined);
 
   const { isCapturing, audioLevel, startCapture, stopCapture } =
     useAudioCapture();

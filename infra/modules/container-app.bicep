@@ -9,12 +9,16 @@ param env array = []
 param secrets array = []
 param isExternal bool = true
 param healthProbePath string = '/'
+param serviceName string = ''
 
 var hasImage = imageName != ''
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
+  tags: {
+    'azd-service-name': serviceName
+  }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {

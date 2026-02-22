@@ -6,7 +6,7 @@ param backendImageName string = ''
 param frontendImageName string = ''
 @secure()
 param copilotGithubToken string
-param azureVoiceliveEndpoint string
+param azureVoiceliveEndpoint string = ''
 
 var abbrevs = {
   logAnalytics: 'log'
@@ -93,6 +93,7 @@ module backendApp 'modules/container-app.bicep' = {
     targetPort: 8000
     managedIdentityId: managedIdentity.outputs.id
     healthProbePath: '/health'
+    serviceName: 'backend'
     env: [
       {
         name: 'AZURE_VOICELIVE_ENDPOINT'
@@ -151,6 +152,7 @@ module frontendApp 'modules/container-app.bicep' = {
     targetPort: 3000
     managedIdentityId: managedIdentity.outputs.id
     healthProbePath: '/'
+    serviceName: 'frontend'
     env: [
       {
         name: 'NEXT_PUBLIC_WS_URL'
