@@ -199,8 +199,14 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       if (sessionStateRef.current === "speaking") {
         stopPlayback();
       }
-      await startCapture(onAudioChunk);
-      wsRef.current?.send({ type: "control", action: "start_listening" });
+      try {
+        await startCapture(onAudioChunk);
+        wsRef.current?.send({ type: "control", action: "start_listening" });
+      } catch (err) {
+        console.error("Failed to start audio capture:", err);
+        // Ensure we don't leave the UI in a broken half-capturing state
+        stopCapture();
+      }
     }
   }, [isCapturing, startCapture, stopCapture, stopPlayback, onAudioChunk]);
 

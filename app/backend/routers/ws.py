@@ -111,7 +111,12 @@ async def _process_agent_response(
             logger.exception("Error processing agent response")
             await _send_msg(ws, ErrorMessage(message="Error processing your message").model_dump())
         finally:
-            await _set_state(ws, session, SessionState.IDLE)
+            # Only transition to IDLE if the session is still in an agent-owned
+            # state (THINKING or SPEAKING).  If the user toggled the mic on
+            # while the agent was running, the state will already be LISTENING
+            # — we must not overwrite that or the mic appears "broken".
+            if session.state in (SessionState.THINKING, SessionState.SPEAKING):
+                await _set_state(ws, session, SessionState.IDLE)
 
 
 async def _handle_text(
@@ -143,7 +148,10 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
         await _set_state(ws, session, SessionState.LISTENING)
 
     elif msg.action == "stop_listening":
-        await _set_state(ws, session, SessionState.IDLE)
+        # Only go to IDLE if the session is currently LISTENING.
+        # If the agent is THINKING/SPEAKING, let it keep that state.
+        if session.state == SessionState.LISTENING:
+            await _set_state(ws, session, SessionState.IDLE)
 
 
 async def _voicelive_listener(
