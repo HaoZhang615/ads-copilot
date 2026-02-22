@@ -29,8 +29,7 @@ interface UseVoiceSessionReturn {
   sendTextMessage: (text: string) => void;
 }
 
-const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
+const DEFAULT_WS_URL = "ws://localhost:8000/ws";
 
 let messageIdCounter = 0;
 function generateId(): string {
@@ -125,23 +124,42 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   };
 
   useEffect(() => {
-    const ws = new WebSocketManager(WS_URL);
-    wsRef.current = ws;
+    let cancelled = false;
+    let ws: WebSocketManager | null = null;
+    let checkConnection: ReturnType<typeof setInterval> | null = null;
+    let unsubscribe: (() => void) | null = null;
 
-    const checkConnection = setInterval(() => {
-      setIsConnected(ws.isConnected);
-    }, 500);
+    async function init() {
+      let wsUrl = DEFAULT_WS_URL;
+      try {
+        const res = await fetch("/api/config");
+        if (res.ok) {
+          const cfg = await res.json();
+          if (cfg.wsUrl) wsUrl = cfg.wsUrl;
+        }
+      } catch {
+        // fall back to default
+      }
 
-    const unsubscribe = ws.onMessage((msg: IncomingMessage) => {
-      handleMessageRef.current?.(msg);
-    });
+      if (cancelled) return;
 
-    ws.connect();
+      ws = new WebSocketManager(wsUrl);
+      wsRef.current = ws;
+      checkConnection = setInterval(() => {
+        setIsConnected(ws!.isConnected);
+      }, 500);
+      unsubscribe = ws.onMessage((msg: IncomingMessage) => {
+        handleMessageRef.current?.(msg);
+      });
+      ws.connect();
+    }
 
+    init();
     return () => {
-      clearInterval(checkConnection);
-      unsubscribe();
-      ws.disconnect();
+      cancelled = true;
+      if (checkConnection) clearInterval(checkConnection);
+      unsubscribe?.();
+      ws?.disconnect();
     };
   }, []);
 

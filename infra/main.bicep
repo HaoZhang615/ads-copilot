@@ -105,7 +105,7 @@ module backendApp 'modules/container-app.bicep' = {
       }
       {
         name: 'AZURE_VOICELIVE_MODEL'
-        value: 'gpt-4o'
+        value: 'gpt-4o-realtime-preview'
       }
       {
         name: 'AZURE_CLIENT_ID'
@@ -155,11 +155,11 @@ module frontendApp 'modules/container-app.bicep' = {
     serviceName: 'frontend'
     env: [
       {
-        name: 'NEXT_PUBLIC_WS_URL'
+        name: 'BACKEND_WS_URL'
         value: 'wss://${backendApp.outputs.fqdn}/ws'
       }
       {
-        name: 'NEXT_PUBLIC_API_URL'
+        name: 'BACKEND_API_URL'
         value: 'https://${backendApp.outputs.fqdn}'
       }
     ]
