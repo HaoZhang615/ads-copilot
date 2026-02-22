@@ -1,0 +1,13 @@
+{
+  "name": "databricks-ads-session",
+  "description": "Conduct Azure Databricks Architecture Design Sessions (ADS). Orchestrate a structured, multi-turn conversation to gather solution requirements, then generate a Databricks-centric architecture diagram.",
+  "version": "2.0.0",
+  "prompts": [
+    {
+      "name": "ads-session",
+      "description": "Run a full ADS session",
+      "path": "SKILL.md"
+    }
+  ],
+  "tools": []
+}

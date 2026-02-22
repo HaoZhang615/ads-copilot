@@ -71,6 +71,7 @@ Load this file when the user gives vague or incomplete answers during the ADS co
 4. "Is there a requirement for customer-managed encryption keys, or is Microsoft-managed acceptable?"
 5. "Do you need IP-based access lists or private endpoints for storage and compute?"
 6. "Is there a security review or approval process that architectures must pass?"
+7. "Do you need attribute-based access control (ABAC) — for example, restricting access based on data classification tags like 'PII' or 'confidential' rather than just table/column grants?"
 
 **Red Flags**:
 - "No special security requirements" from a regulated industry (finance, healthcare, government). Confirm explicitly.
@@ -182,12 +183,15 @@ Load this file when the user gives vague or incomplete answers during the ADS co
 **Progressive Questions**:
 1. "What is the primary GenAI use case: internal knowledge assistant, customer-facing chatbot, document extraction, code generation, or something else?"
 2. "What knowledge sources will the AI need access to: internal documents, databases, wikis, APIs, or external data?"
-3. "What LLM provider are you considering: Azure OpenAI (GPT-4), open-source models (Llama, Mistral, DBRX), or a mix?"
+3. "What LLM provider are you considering: Azure OpenAI (GPT-4.1 / GPT-5.2 / o3), open-source models (Meta Llama, Mistral, DBRX) via Mosaic AI Model Serving, or a mix?"
 4. "Do you need multi-turn conversational agents (that remember context across messages), or single-shot Q&A?"
 5. "How many users will interact with the AI: dozens (internal tool) or thousands (customer-facing)?"
 6. "Are there data sensitivity concerns — can user queries or AI responses contain PII? Do you need guardrails on outputs?"
 7. "Do you need AI agents that can take actions (call APIs, query databases, trigger workflows), or is retrieval-only sufficient?"
 8. "How will you evaluate AI quality: human review, automated evaluation metrics, A/B testing?"
+9. "Do your AI agents need to connect to external tools or APIs? Are you considering MCP (Model Context Protocol) for standardized agent-tool connectivity?"
+10. "Have you evaluated no-code agent options like Mosaic AI Agent Bricks (Knowledge Assistant for document Q&A, Supervisor Agent for multi-agent orchestration), or do you need full custom agent development?"
+11. "What agent framework are you considering: Mosaic AI Agent Framework, LangGraph, CrewAI, or custom? This affects how we design the serving and monitoring layer."
 
 **Red Flags**:
 - "We want to use ChatGPT for everything." Probe for specific use cases — most benefit from RAG over raw LLM.
@@ -214,3 +218,45 @@ Load this file when the user gives vague or incomplete answers during the ADS co
 - "We will build our own hosting." Evaluate Databricks Apps first — serverless, integrated with Unity Catalog, no infra to manage.
 - Sub-10ms latency requirement for point lookups. This signals a need for Lakebase (serverless OLTP) or Cosmos DB, not SQL Warehouse.
 - Application needs to serve external customers with high availability. Probe DR requirements and SLA targets.
+
+
+---
+
+## FinOps & Cost Optimization
+
+**Context**: User has not discussed cost design, or says "we will optimize later." Cost decisions affect architecture fundamentally — serverless vs provisioned, spot vs on-demand, storage tiering.
+
+**Progressive Questions**:
+1. "Do you have a target monthly Azure spend for the data platform? Even a rough range helps size the architecture."
+2. "Is this a chargeback model (each team pays for their usage) or a shared-cost model?"
+3. "Are there existing Azure Reserved Instances or committed-use discounts we should factor in?"
+4. "What is more important: minimizing cost at the expense of some latency, or guaranteed performance at higher cost?"
+5. "Who will monitor and manage cost: a central FinOps team, platform team, or individual teams?"
+6. "Have you used Databricks system tables (system.billing.usage) or third-party FinOps tools to track spend?"
+7. "Are spot instances acceptable for non-SLA workloads like dev/test and batch training?"
+
+**Red Flags**:
+- "Cost is not a concern." It always is — someone will ask about it later. Establish cost design early.
+- No tagging strategy. Without tags, cost attribution is impossible. Recommend environment + team + workload tags.
+- All workloads on provisioned clusters. Evaluate serverless (SQL Warehouse, Jobs Compute) for variable workloads.
+- No auto-termination policies. Idle clusters are the #1 source of wasted spend.
+
+---
+
+## Table Format & Interoperability
+
+**Context**: User mentions Iceberg, multi-engine access, data sharing with external parties, or avoiding vendor lock-in. Also relevant when Snowflake, Fabric, Athena, or other query engines need to read the same data.
+
+**Progressive Questions**:
+1. "Do other query engines (Snowflake, Fabric, Athena, Trino) need to read your Delta tables directly?"
+2. "Is vendor lock-in a concern? If so, is it about the table format, the catalog, or both?"
+3. "Do you need to share data with external organizations? If yes, is Delta Sharing sufficient, or do they require Iceberg format?"
+4. "Are you already using Iceberg in other parts of your stack? If so, which catalog: AWS Glue, Hive Metastore, Snowflake?"
+5. "Would UniForm (automatic Delta-to-Iceberg metadata) solve your interoperability needs, or do you need native Iceberg tables?"
+6. "Do you need Compatibility Mode to auto-sync Unity Catalog tables to external engines without data copying?"
+
+**Red Flags**:
+- "We chose Iceberg for everything" without a multi-engine requirement. Delta Lake is the Databricks-native default — switching adds complexity without clear benefit.
+- "We need both Delta and Iceberg" without clarity on which engine reads which. Map the access patterns first.
+- External parties require a specific format but the customer hasn't evaluated Delta Sharing (which now supports Iceberg clients).
+- User conflates table format (Delta/Iceberg) with catalog (Unity Catalog/Glue/Polaris). Separate the decisions.

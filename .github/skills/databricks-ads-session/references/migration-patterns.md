@@ -14,7 +14,7 @@ Load this file when the user indicates they are migrating from an existing platf
 | Spark on YARN | Databricks clusters | Remove YARN config. Use Databricks cluster policies. Serverless by default. |
 | Oozie workflows | LakeFlow Jobs / ADF | Map Oozie actions to LakeFlow Jobs tasks or ADF activities |
 | HBase | Cosmos DB / Delta tables / Lakebase | Depends on access pattern: key-value → Lakebase, analytical → Delta |
-| Ranger/Sentry | Unity Catalog ACLs | Map existing policies to UC grants |
+| Ranger/Sentry | Unity Catalog ACLs | Map existing policies to UC grants. **Note**: new workspaces (post Dec 2025) default to Unity Catalog only — no legacy Hive Metastore or DBFS access. Plan for UC from day one. |
 | Sqoop | LakeFlow Connect / Auto Loader | LakeFlow Connect handles JDBC sources natively with CDC support |
 
 ### Key Risks
@@ -28,6 +28,7 @@ Load this file when the user indicates they are migrating from an existing platf
 - Use Delta Lake format for target tables. Do not migrate as raw Parquet.
 - Use Liquid Clustering instead of partitioning for migrated tables.
 - Deploy with DABs (Databricks Asset Bundles) for repeatable CI/CD.
+- Consider Databricks Lakebridge for AI-assisted migration assessment and automated code conversion.
 
 ### ADS Questions
 - "How many Hive databases and tables? Total HDFS footprint?"
@@ -48,7 +49,7 @@ Load this file when the user indicates they are migrating from an existing platf
 | Snowflake stages | ADLS Gen2 external locations | Register as Unity Catalog external locations |
 | SnowPipe | Auto Loader / LakeFlow Connect | Both support incremental file ingestion |
 | Snowflake tasks | LakeFlow Jobs | Cron-based scheduling, dependency chains, event triggers |
-| Snowflake Streams + Tasks | LakeFlow Declarative Pipelines + LakeFlow Jobs | CDC pattern replacement |
+| Snowflake Streams + Tasks | LakeFlow Spark Declarative Pipelines + LakeFlow Jobs | CDC pattern replacement |
 | Snowpark | Databricks notebooks / PySpark | API differences but similar concepts |
 | Snowflake data sharing | Unity Catalog Delta Sharing | Open protocol, cross-platform compatible |
 | Snowflake RBAC | Unity Catalog grants | Map roles to UC groups |
@@ -98,6 +99,7 @@ Load this file when the user indicates they are migrating from an existing platf
 - Validate critical reports produce identical results before decommissioning.
 - Use Lakehouse Federation to query Teradata during the migration window.
 - Use Liquid Clustering to replace hash distribution strategy.
+- Consider Databricks Lakebridge for AI-assisted Teradata SQL translation and migration planning.
 
 ### ADS Questions
 - "How many Teradata nodes and total storage?"
@@ -164,6 +166,7 @@ Load this file when the user indicates they are migrating from an existing platf
 - **Recommended**: CDC-based migration using LakeFlow Connect or Debezium for minimal downtime.
 - Initial full load + ongoing CDC replication, cutover when validated.
 - Use Lakehouse Federation to query source databases during migration.
+- Consider Databricks Lakebridge for automated PL-SQL/T-SQL conversion and migration assessment.
 
 ### ADS Questions
 - "How many databases and total size?"
@@ -202,6 +205,9 @@ Load this file when the user indicates they are migrating from an existing platf
 - "Do you use Synapse Link for Cosmos DB?"
 - "Are Synapse Pipelines managing orchestration, or is it separate ADF?"
 - "What is driving the move from Synapse to Databricks?"
+- "Is Microsoft Fabric also being considered? If so, which workloads would stay in Databricks vs move to Fabric?"
+
+**Note**: Microsoft offers a Synapse→Fabric Migration Assistant. If the customer is M365 E3/E5 aligned, evaluate Fabric for self-service BI workloads alongside Databricks for engineering/ML.
 
 ---
 
@@ -237,3 +243,41 @@ Load this file when the user indicates they are migrating from an existing platf
 - "What is the driver: multi-cloud strategy, cost, or consolidation with other Azure workloads?"
 - "Do you use BigQuery scheduled queries or Data Transfer Service? How many pipelines?"
 - "Would querying BigQuery data in-place via Lakehouse Federation work, or do you need full migration?"
+
+
+---
+
+## Microsoft Fabric
+
+### When This Comes Up
+
+Microsoft Fabric is both a migration target competitor and a complementary platform. Address it when:
+- Customer has M365 E3/E5 licenses (Fabric capacity may be included)
+- Customer mentions OneLake, Power BI Premium, or Fabric
+- Customer is evaluating Databricks vs Fabric (not always either/or)
+
+### Positioning: Databricks + Fabric Coexistence
+
+| Workload | Best Fit | Rationale |
+|---------|---------|---------| 
+| Data engineering & ETL | Databricks | LakeFlow, Spark, Python ecosystem, Delta Lake native |
+| ML & AI | Databricks | Mosaic AI, MLflow 3.0, GPU compute, model serving |
+| GenAI & Agents | Databricks | Agent Framework, Vector Search, MCP, Agent Bricks |
+| Self-service BI | Fabric | Power BI integration, natural for business analysts |
+| Small-scale SQL analytics | Fabric | Included with M365, low barrier |
+| Enterprise SQL analytics | Databricks | SQL Warehouse performance, Photon, concurrency |
+| Real-time streaming | Databricks | Structured Streaming, Flink, mature ecosystem |
+| Data governance | Databricks (UC) | Unity Catalog governs both — Fabric reads via OneLake shortcuts |
+
+### Integration Pattern
+
+- **OneLake Shortcuts**: Fabric can read Delta tables in ADLS Gen2 managed by Databricks via OneLake shortcuts — no data copy.
+- **Unity Catalog + Fabric**: UC governs the data, Fabric consumes for BI. Best of both worlds.
+- **Mirroring**: SQL Server 2025 and Cosmos DB can mirror to both OneLake and ADLS Gen2.
+
+### ADS Questions
+- "Does your organization use Microsoft 365 E3 or E5? Fabric capacity may already be available."
+- "Which users need Fabric: business analysts using Power BI, or data engineers building pipelines?"
+- "Is the decision Databricks vs Fabric, or Databricks + Fabric for different workloads?"
+- "Do you have existing Power BI Premium capacity that could convert to Fabric?"
+- "What is the governance requirement: single catalog (Unity Catalog) or separate for each platform?"

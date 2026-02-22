@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "Bicep": {
+      "type": "local",
+      "command": ["dnx", "-y", "Azure.Bicep.McpServer"],
+      "enabled": true
+    }
+  }
+}
