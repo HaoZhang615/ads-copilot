@@ -1,0 +1,177 @@
+targetScope = 'resourceGroup'
+
+param environmentName string
+param location string = resourceGroup().location
+param backendImageName string = ''
+param frontendImageName string = ''
+@secure()
+param githubToken string
+param azureVoiceliveEndpoint string
+
+var abbrevs = {
+  logAnalytics: 'log'
+  containerRegistry: 'cr'
+  containerAppsEnv: 'cae'
+  managedIdentity: 'id'
+  cognitiveServices: 'cog'
+  keyVault: 'kv'
+  backendApp: 'ca'
+  frontendApp: 'ca'
+}
+
+var registryName = replace('${abbrevs.containerRegistry}${environmentName}', '-', '')
+
+module logAnalytics 'modules/log-analytics.bicep' = {
+  name: 'log-analytics'
+  params: {
+    name: '${abbrevs.logAnalytics}-${environmentName}'
+    location: location
+  }
+}
+
+module containerRegistry 'modules/container-registry.bicep' = {
+  name: 'container-registry'
+  params: {
+    name: registryName
+    location: location
+  }
+}
+
+module containerAppsEnv 'modules/container-apps-environment.bicep' = {
+  name: 'container-apps-environment'
+  params: {
+    name: '${abbrevs.containerAppsEnv}-${environmentName}'
+    location: location
+    logAnalyticsCustomerId: logAnalytics.outputs.customerId
+    logAnalyticsSharedKey: logAnalytics.outputs.sharedKey
+  }
+}
+
+module managedIdentity 'modules/managed-identity.bicep' = {
+  name: 'managed-identity'
+  params: {
+    name: '${abbrevs.managedIdentity}-${environmentName}'
+    location: location
+  }
+}
+
+module cognitiveServices 'modules/cognitive-services.bicep' = {
+  name: 'cognitive-services'
+  params: {
+    name: '${abbrevs.cognitiveServices}-${environmentName}'
+    location: location
+  }
+}
+
+module keyVault 'modules/key-vault.bicep' = {
+  name: 'key-vault'
+  params: {
+    name: '${abbrevs.keyVault}-${environmentName}'
+    location: location
+    principalId: managedIdentity.outputs.principalId
+    githubToken: githubToken
+  }
+}
+
+module roleAssignments 'modules/role-assignments.bicep' = {
+  name: 'role-assignments'
+  params: {
+    principalId: managedIdentity.outputs.principalId
+    cognitiveServicesAccountName: cognitiveServices.outputs.name
+    containerRegistryName: containerRegistry.outputs.name
+  }
+}
+
+module backendApp 'modules/container-app.bicep' = {
+  name: 'backend-app'
+  params: {
+    name: '${abbrevs.backendApp}-${environmentName}-backend'
+    location: location
+    containerAppsEnvironmentId: containerAppsEnv.outputs.id
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: backendImageName
+    targetPort: 8000
+    managedIdentityId: managedIdentity.outputs.id
+    managedIdentityClientId: managedIdentity.outputs.clientId
+    healthProbePath: '/health'
+    env: [
+      {
+        name: 'AZURE_VOICELIVE_ENDPOINT'
+        value: azureVoiceliveEndpoint != '' ? azureVoiceliveEndpoint : cognitiveServices.outputs.endpoint
+      }
+      {
+        name: 'AZURE_VOICELIVE_API_VERSION'
+        value: '2025-10-01'
+      }
+      {
+        name: 'AZURE_VOICELIVE_MODEL'
+        value: 'gpt-4o'
+      }
+      {
+        name: 'AZURE_CLIENT_ID'
+        value: managedIdentity.outputs.clientId
+      }
+      {
+        name: 'BACKEND_HOST'
+        value: '0.0.0.0'
+      }
+      {
+        name: 'BACKEND_PORT'
+        value: '8000'
+      }
+      {
+        name: 'CORS_ORIGINS'
+        value: 'https://${abbrevs.frontendApp}-${environmentName}-frontend.${containerAppsEnv.outputs.defaultDomain}'
+      }
+      {
+        name: 'GITHUB_TOKEN'
+        secretRef: 'github-token'
+      }
+    ]
+    secrets: [
+      {
+        name: 'github-token'
+        keyVaultUrl: '${keyVault.outputs.vaultUri}secrets/github-token'
+        identity: managedIdentity.outputs.id
+      }
+    ]
+  }
+  dependsOn: [
+    roleAssignments
+  ]
+}
+
+module frontendApp 'modules/container-app.bicep' = {
+  name: 'frontend-app'
+  params: {
+    name: '${abbrevs.frontendApp}-${environmentName}-frontend'
+    location: location
+    containerAppsEnvironmentId: containerAppsEnv.outputs.id
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: frontendImageName
+    targetPort: 3000
+    managedIdentityId: managedIdentity.outputs.id
+    managedIdentityClientId: managedIdentity.outputs.clientId
+    healthProbePath: '/'
+    env: [
+      {
+        name: 'NEXT_PUBLIC_WS_URL'
+        value: 'wss://${backendApp.outputs.fqdn}/ws'
+      }
+      {
+        name: 'NEXT_PUBLIC_API_URL'
+        value: 'https://${backendApp.outputs.fqdn}'
+      }
+    ]
+  }
+  dependsOn: [
+    roleAssignments
+  ]
+}
+
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
+output BACKEND_URL string = backendApp.outputs.uri
+output FRONTEND_URL string = frontendApp.outputs.uri
+output AZURE_VOICELIVE_ENDPOINT string = cognitiveServices.outputs.endpoint

@@ -1,0 +1,35 @@
+{
+  "name": "databricks-ads-session",
+  "description": "Conduct Azure Databricks Architecture Design Sessions (ADS). Orchestrate a structured, multi-turn conversation to gather solution requirements, then generate a Databricks-centric architecture diagram.",
+  "version": "2.0.0",
+  "prompts": [
+    {
+      "name": "ads-session",
+      "description": "Run a full ADS session",
+      "path": "SKILL.md"
+    }
+  ],
+  "tools": [
+    {
+      "name": "generate_architecture",
+      "description": "Generate a Mermaid architecture diagram for a given Databricks pattern. Patterns: medallion, streaming, ml-platform, data-mesh, migration, dwh-replacement, iot, hybrid.",
+      "command": "python",
+      "args": ["scripts/generate_architecture.py", "--pattern", "{pattern}"],
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Architecture pattern name",
+            "enum": ["medallion", "streaming", "ml-platform", "data-mesh", "migration", "dwh-replacement", "iot", "hybrid"]
+          },
+          "params": {
+            "type": "string",
+            "description": "Optional JSON string of custom parameters for the pattern generator"
+          }
+        },
+        "required": ["pattern"]
+      }
+    }
+  ]
+}
