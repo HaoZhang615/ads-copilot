@@ -10,9 +10,6 @@
     },
     "copilotGithubToken": {
       "value": "${COPILOT_GITHUB_TOKEN}"
-    },
-    "azureVoiceliveEndpoint": {
-      "value": "${AZURE_VOICELIVE_ENDPOINT}"
     }
   }
 }

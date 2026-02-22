@@ -6,7 +6,7 @@ param backendImageName string = ''
 param frontendImageName string = ''
 @secure()
 param copilotGithubToken string
-param azureVoiceliveEndpoint string = ''
+
 
 var abbrevs = {
   logAnalytics: 'log'
@@ -97,7 +97,7 @@ module backendApp 'modules/container-app.bicep' = {
     env: [
       {
         name: 'AZURE_VOICELIVE_ENDPOINT'
-        value: azureVoiceliveEndpoint != '' ? azureVoiceliveEndpoint : cognitiveServices.outputs.endpoint
+        value: cognitiveServices.outputs.endpoint
       }
       {
         name: 'AZURE_VOICELIVE_API_VERSION'
