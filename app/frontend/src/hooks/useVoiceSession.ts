@@ -67,7 +67,15 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       }
 
       case "agent_text": {
+        // Guard: skip empty text deltas (e.g. from tool-call events)
+        if (!msg.text && !msg.is_final) {
+          break;
+        }
         if (!currentAssistantIdRef.current) {
+          // Only create a new bubble if we have actual text content
+          if (!msg.text) {
+            break;
+          }
           const id = generateId();
           currentAssistantIdRef.current = id;
           const assistantMessage: Message = {
@@ -85,14 +93,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
               m.id === currentId
                 ? {
                     ...m,
-                    content: msg.is_final ? msg.text : m.content + msg.text,
+                    content: msg.is_final ? msg.text : m.content + (msg.text || ""),
                     isStreaming: !msg.is_final,
                   }
                 : m
             )
           );
         }
-
         if (msg.is_final) {
           currentAssistantIdRef.current = null;
         }

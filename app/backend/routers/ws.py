@@ -47,34 +47,64 @@ async def _handle_audio(ws: WebSocket, session: Session, msg: AudioMessage) -> N
         await _send_msg(ws, ErrorMessage(message="Failed to send audio to VoiceLive").model_dump())
 
 
-async def _handle_text(ws: WebSocket, session: Session, msg: TextMessage) -> None:
-    await _set_state(ws, session, SessionState.THINKING)
-    session.turn_count += 1
-    session.conversation_history.append({"role": "user", "content": msg.content})
+async def _process_agent_response(
+    ws: WebSocket,
+    session: Session,
+    text: str,
+    agent_lock: asyncio.Lock,
+) -> None:
+    """Send text to the Copilot agent and stream the response back.
 
-    full_response: list[str] = []
-    try:
-        async for chunk in session.copilot.send_message(msg.content):
-            full_response.append(chunk)
-            await _send_msg(ws, AgentTextMessage(text=chunk, is_final=False).model_dump())
+    Runs as a background task so the WS receive loop is never blocked.
+    Uses agent_lock to serialise concurrent agent calls (e.g. rapid user
+    messages or voice transcriptions arriving while a previous turn is
+    still streaming).
+    """
+    async with agent_lock:
+        await _set_state(ws, session, SessionState.THINKING)
+        session.turn_count += 1
+        session.conversation_history.append({"role": "user", "content": text})
 
-        final_text = "".join(full_response)
-        await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
-        session.conversation_history.append({"role": "assistant", "content": final_text})
+        full_response: list[str] = []
+        try:
+            async for chunk in session.copilot.send_message(text):
+                full_response.append(chunk)
+                await _send_msg(ws, AgentTextMessage(text=chunk, is_final=False).model_dump())
 
-        await _set_state(ws, session, SessionState.SPEAKING)
-        sentences = detect_sentence_boundaries(final_text)
-        for sentence in sentences:
-            try:
-                await session.voicelive.send_tts_request(sentence)
-            except Exception:
-                logger.warning("TTS request failed for sentence", exc_info=True)
+            final_text = "".join(full_response)
+            if final_text:
+                await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
+            session.conversation_history.append({"role": "assistant", "content": final_text})
 
-    except Exception:
-        logger.exception("Error processing text message")
-        await _send_msg(ws, ErrorMessage(message="Error processing your message").model_dump())
-    finally:
-        await _set_state(ws, session, SessionState.IDLE)
+            # Request TTS for the response (only if VoiceLive is connected
+            # and there is actual text).
+            if final_text:
+                await _set_state(ws, session, SessionState.SPEAKING)
+                sentences = detect_sentence_boundaries(final_text)
+                for sentence in sentences:
+                    try:
+                        await session.voicelive.send_tts_request(sentence)
+                    except Exception:
+                        logger.warning("TTS request failed for sentence", exc_info=True)
+
+        except Exception:
+            logger.exception("Error processing agent response")
+            await _send_msg(ws, ErrorMessage(message="Error processing your message").model_dump())
+        finally:
+            await _set_state(ws, session, SessionState.IDLE)
+
+
+async def _handle_text(
+    ws: WebSocket,
+    session: Session,
+    msg: TextMessage,
+    agent_lock: asyncio.Lock,
+) -> asyncio.Task[None]:
+    """Kick off agent processing in a background task (non-blocking)."""
+    return asyncio.create_task(
+        _process_agent_response(ws, session, msg.content, agent_lock),
+        name="agent-text",
+    )
 
 
 async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) -> None:
@@ -92,7 +122,14 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
         await _set_state(ws, session, SessionState.IDLE)
 
 
-async def _voicelive_listener(ws: WebSocket, session: Session) -> None:
+async def _voicelive_listener(
+    ws: WebSocket,
+    session: Session,
+    agent_lock: asyncio.Lock,
+) -> None:
+    """Listen for VoiceLive events and dispatch agent calls as background tasks."""
+    agent_tasks: list[asyncio.Task[None]] = []
+
     try:
         async for event in session.voicelive.receive_events():
             event_type = event.get("type", "")
@@ -102,26 +139,12 @@ async def _voicelive_listener(ws: WebSocket, session: Session) -> None:
                 if text:
                     await _send_msg(ws, TranscriptMessage(text=text, is_final=True).model_dump())
 
-                    await _set_state(ws, session, SessionState.THINKING)
-                    session.turn_count += 1
-                    session.conversation_history.append({"role": "user", "content": text})
-
-                    full_response: list[str] = []
-                    async for chunk in session.copilot.send_message(text):
-                        full_response.append(chunk)
-                        await _send_msg(ws, AgentTextMessage(text=chunk, is_final=False).model_dump())
-
-                    final_text = "".join(full_response)
-                    await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
-                    session.conversation_history.append({"role": "assistant", "content": final_text})
-
-                    await _set_state(ws, session, SessionState.SPEAKING)
-                    sentences = detect_sentence_boundaries(final_text)
-                    for sentence in sentences:
-                        try:
-                            await session.voicelive.send_tts_request(sentence)
-                        except Exception:
-                            logger.warning("TTS request failed", exc_info=True)
+                    # Spawn agent processing in background (non-blocking)
+                    task = asyncio.create_task(
+                        _process_agent_response(ws, session, text, agent_lock),
+                        name="agent-voice",
+                    )
+                    agent_tasks.append(task)
 
             elif event_type == "conversation.item.input_audio_transcription.delta":
                 text = event.get("transcript", "") or event.get("delta", "")
@@ -144,6 +167,17 @@ async def _voicelive_listener(ws: WebSocket, session: Session) -> None:
         pass
     except Exception:
         logger.exception("VoiceLive listener error")
+    finally:
+        # Clean up any outstanding agent tasks
+        for task in agent_tasks:
+            if not task.done():
+                task.cancel()
+        for task in agent_tasks:
+            if not task.done():
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
 
 @router.websocket("/ws")
@@ -152,6 +186,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     session: Session | None = None
     voicelive_task: asyncio.Task[None] | None = None
+    agent_tasks: list[asyncio.Task[None]] = []
+    # Serialises agent calls so concurrent text/voice messages don't
+    # interleave their streaming responses.
+    agent_lock = asyncio.Lock()
 
     try:
         user_id = websocket.query_params.get("user_id", "anonymous")
@@ -163,7 +201,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         })
         await _send_msg(websocket, StateMessage(state=session.state).model_dump())
 
-        voicelive_task = asyncio.create_task(_voicelive_listener(websocket, session))
+        voicelive_task = asyncio.create_task(
+            _voicelive_listener(websocket, session, agent_lock),
+        )
 
         while True:
             raw = await websocket.receive_text()
@@ -177,7 +217,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if isinstance(msg, AudioMessage):
                 await _handle_audio(websocket, session, msg)
             elif isinstance(msg, TextMessage):
-                await _handle_text(websocket, session, msg)
+                # Non-blocking: agent runs in background task
+                task = await _handle_text(websocket, session, msg, agent_lock)
+                agent_tasks.append(task)
             elif isinstance(msg, ControlMessage):
                 await _handle_control(websocket, session, msg)
 
@@ -186,6 +228,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except Exception:
         logger.exception("WebSocket error")
     finally:
+        # Cancel agent tasks
+        for task in agent_tasks:
+            if not task.done():
+                task.cancel()
+        for task in agent_tasks:
+            if not task.done():
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
         if voicelive_task and not voicelive_task.done():
             voicelive_task.cancel()
             try:

@@ -105,7 +105,7 @@ module backendApp 'modules/container-app.bicep' = {
       }
       {
         name: 'AZURE_VOICELIVE_MODEL'
-        value: 'gpt-4o-realtime-preview'
+        value: 'gpt-realtime'
       }
       {
         name: 'AZURE_CLIENT_ID'
