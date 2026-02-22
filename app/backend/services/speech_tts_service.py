@@ -36,6 +36,9 @@ def _sanitize_for_tts(text: str) -> str:
     """Strip markdown formatting and emoji so TTS reads natural prose."""
     # Remove emoji
     text = _EMOJI_RE.sub("", text)
+    # Remove fenced code blocks entirely (e.g. ```mermaid...```)
+    # Must come before inline backtick removal
+    text = re.sub(r"```[\s\S]*?```", "", text)
     # Remove markdown bold/italic: **text**, __text__, *text*, _text_
     text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
     text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text)
