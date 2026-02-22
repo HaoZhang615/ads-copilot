@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from azure.ai.voicelive.aio import connect, VoiceLiveConnection
+from azure.ai.voicelive.models import InputTextContentPart, UserMessageItem
 from azure.identity.aio import DefaultAzureCredential
 
 from app.backend.config import settings
@@ -112,11 +113,7 @@ class VoiceLiveService:
         logger.info("TTS request: %.80s…" if len(text) > 80 else "TTS request: %s", text)
         # Step 1: inject the text as a user message into the conversation
         await self._connection.conversation.item.create(
-            item={
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": text}],
-            },
+            item=UserMessageItem(content=[InputTextContentPart(text=text)]),
         )
 
         # Step 2: trigger a response with instructions to repeat verbatim
