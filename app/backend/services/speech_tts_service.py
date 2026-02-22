@@ -35,15 +35,13 @@ class SpeechTtsService:
             "https://cognitiveservices.azure.com/.default"
         )
 
-        endpoint = settings.azure_voicelive_endpoint.rstrip("/")
+        resource_id = settings.azure_speech_service_id
         region = settings.azure_speech_region
         aad_token = token_response.token
-
         loop = asyncio.get_event_loop()
-
         def _do_synthesis() -> bytes:
             speech_config = speechsdk.SpeechConfig(
-                auth_token=f"aad#{endpoint}#{aad_token}",
+                auth_token=f"aad#{resource_id}#{aad_token}",
                 region=region,
             )
             speech_config.set_speech_synthesis_output_format(

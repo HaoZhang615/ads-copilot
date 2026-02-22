@@ -112,6 +112,10 @@ module backendApp 'modules/container-app.bicep' = {
         value: location
       }
       {
+        name: 'AZURE_SPEECH_SERVICE_ID'
+        value: cognitiveServices.outputs.id
+      }
+      {
         name: 'AZURE_CLIENT_ID'
         value: managedIdentity.outputs.clientId
       }
