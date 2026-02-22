@@ -43,6 +43,9 @@ class TtsAudioMessage(BaseModel):
     data: str
 
 
+class TtsStopMessage(BaseModel):
+    type: Literal["tts_stop"] = "tts_stop"
+
 class StateMessage(BaseModel):
     type: Literal["state"] = "state"
     state: SessionState
@@ -57,6 +60,7 @@ OutgoingMessage = Union[
     TranscriptMessage,
     AgentTextMessage,
     TtsAudioMessage,
+    TtsStopMessage,
     StateMessage,
     ErrorMessage,
 ]

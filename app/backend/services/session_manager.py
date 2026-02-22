@@ -27,6 +27,7 @@ class Session:
         self.last_activity: datetime = datetime.now(timezone.utc)
         self.conversation_history: list[dict[str, Any]] = []
         self.turn_count: int = 0
+        self.tts_cancel_event: asyncio.Event = asyncio.Event()
 
     def touch(self) -> None:
         self.last_activity = datetime.now(timezone.utc)

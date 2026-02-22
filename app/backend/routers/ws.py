@@ -17,6 +17,7 @@ from app.backend.models.ws_messages import (
     TextMessage,
     TranscriptMessage,
     TtsAudioMessage,
+    TtsStopMessage,
 )
 
 from app.backend.services.session_manager import Session, session_manager
@@ -45,6 +46,14 @@ async def _handle_audio(ws: WebSocket, session: Session, msg: AudioMessage) -> N
         await session.voicelive.send_audio(msg.data)
     except Exception:
         await _send_msg(ws, ErrorMessage(message="Failed to send audio to VoiceLive").model_dump())
+
+
+async def _cancel_tts(ws: WebSocket, session: Session) -> None:
+    """Signal TTS cancellation and notify the frontend to stop playback."""
+    if session.state == SessionState.SPEAKING:
+        session.tts_cancel_event.set()
+        await _send_msg(ws, TtsStopMessage().model_dump())
+        logger.info("Barge-in: TTS cancelled due to user speech")
 
 
 async def _process_agent_response(
@@ -79,9 +88,15 @@ async def _process_agent_response(
             # Synthesize TTS via Azure Speech SDK
             if final_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
+                # Clear cancellation flag before starting TTS
+                session.tts_cancel_event.clear()
                 logger.info("TTS: synthesizing %d chars via Azure Speech SDK", len(final_text))
                 try:
                     async for audio_chunk in session.speech_tts.synthesize(final_text):
+                        # Check if barge-in was requested
+                        if session.tts_cancel_event.is_set():
+                            logger.info("TTS: stopping chunk delivery due to barge-in")
+                            break
                         await _send_msg(ws, TtsAudioMessage(data=audio_chunk).model_dump())
                 except Exception:
                     logger.warning("TTS synthesis failed", exc_info=True)
@@ -100,6 +115,8 @@ async def _handle_text(
     agent_lock: asyncio.Lock,
 ) -> asyncio.Task[None]:
     """Kick off agent processing in a background task (non-blocking)."""
+    # Cancel any ongoing TTS when user sends a text message
+    await _cancel_tts(ws, session)
     return asyncio.create_task(
         _process_agent_response(ws, session, msg.content, agent_lock),
         name="agent-text",
@@ -115,6 +132,8 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
         await _send_msg(ws, StateMessage(state=SessionState.IDLE).model_dump())
 
     elif msg.action == "start_listening":
+        # User started mic capture — cancel any ongoing TTS (barge-in)
+        await _cancel_tts(ws, session)
         await _set_state(ws, session, SessionState.LISTENING)
 
     elif msg.action == "stop_listening":
@@ -148,8 +167,13 @@ async def _voicelive_listener(
             elif event_type == "conversation.item.input_audio_transcription.delta":
                 text = event.get("transcript", "") or event.get("delta", "")
                 if text:
+                    # Barge-in: if TTS is playing and user starts speaking, stop it
+                    await _cancel_tts(ws, session)
                     await _send_msg(ws, TranscriptMessage(text=text, is_final=False).model_dump())
 
+            elif event_type == "input_audio_buffer.speech_started":
+                # VoiceLive detected speech start — immediate barge-in
+                await _cancel_tts(ws, session)
 
             elif event_type == "error":
                 error_msg = event.get("error", {}).get("message", "VoiceLive error")

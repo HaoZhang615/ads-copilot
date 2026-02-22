@@ -39,6 +39,11 @@ export type IncomingTtsAudioMessage = {
   data: string;
 };
 
+
+export type IncomingTtsStopMessage = {
+  type: "tts_stop";
+};
+
 export type IncomingStateMessage = {
   type: "state";
   state: SessionState;
@@ -53,6 +58,7 @@ export type IncomingMessage =
   | IncomingTranscriptMessage
   | IncomingAgentTextMessage
   | IncomingTtsAudioMessage
+  | IncomingTtsStopMessage
   | IncomingStateMessage
   | IncomingErrorMessage;
 

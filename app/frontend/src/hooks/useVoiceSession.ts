@@ -111,6 +111,11 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         break;
       }
 
+      case "tts_stop": {
+        stopPlayback();
+        break;
+      }
+
       case "state": {
         setSessionState(msg.state);
         sessionStateRef.current = msg.state;

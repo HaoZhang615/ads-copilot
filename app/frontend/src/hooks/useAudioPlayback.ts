@@ -25,75 +25,87 @@ function int16ToFloat32(int16: Int16Array): Float32Array {
   return float32;
 }
 
+/**
+ * Gapless TTS audio playback using an AudioWorklet ring buffer.
+ *
+ * Instead of creating individual AudioBufferSourceNode instances per
+ * chunk (which causes micro-gap clicks at boundaries), this approach
+ * pushes decoded Float32 samples into an AudioWorklet that maintains
+ * a continuous ring buffer and pulls samples at the audio-thread rate.
+ */
 export function useAudioPlayback(): UseAudioPlaybackReturn {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
-  const queueRef = useRef<AudioBuffer[]>([]);
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const isPlayingRef = useRef(false);
+  const workletReadyRef = useRef(false);
 
-  const getAudioContext = useCallback((): AudioContext => {
-    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
-      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+  const ensureWorklet = useCallback(async (): Promise<AudioWorkletNode> => {
+    // Re-use existing context and worklet node if still alive
+    if (
+      audioContextRef.current &&
+      audioContextRef.current.state !== "closed" &&
+      workletNodeRef.current &&
+      workletReadyRef.current
+    ) {
+      // Resume context if it was suspended (e.g. after user gesture policy)
+      if (audioContextRef.current.state === "suspended") {
+        await audioContextRef.current.resume();
+      }
+      return workletNodeRef.current;
     }
-    return audioContextRef.current;
-  }, []);
 
-  const playNext = useCallback(() => {
-    if (queueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsPlaying(false);
-      return;
-    }
+    // Create a new AudioContext at 24 kHz (matching TTS output)
+    const ctx = new AudioContext({ sampleRate: 24000 });
+    audioContextRef.current = ctx;
 
-    const ctx = getAudioContext();
-    const buffer = queueRef.current.shift()!;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
+    // Load the playback worklet processor
+    await ctx.audioWorklet.addModule("/audio-playback-processor.js");
 
-    currentSourceRef.current = source;
+    const node = new AudioWorkletNode(ctx, "pcm16-playback-processor", {
+      outputChannelCount: [1],
+    });
+    node.connect(ctx.destination);
 
-    source.onended = () => {
-      currentSourceRef.current = null;
-      playNext();
+    // Listen for "ended" messages (buffer drained, no more data)
+    node.port.onmessage = (event: MessageEvent) => {
+      if (event.data === "ended") {
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      }
     };
 
-    source.start();
-  }, [getAudioContext]);
+    workletNodeRef.current = node;
+    workletReadyRef.current = true;
+    return node;
+  }, []);
 
   const enqueueAudio = useCallback(
     (base64Data: string) => {
-      const ctx = getAudioContext();
       const int16 = base64ToInt16Array(base64Data);
       const float32 = int16ToFloat32(int16);
 
-      const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
-      audioBuffer.getChannelData(0).set(float32);
+      // Fire-and-forget: ensure worklet is ready then push samples
+      ensureWorklet().then((node) => {
+        // Transfer the float32 buffer to the worklet thread for zero-copy
+        node.port.postMessage(float32, [float32.buffer]);
 
-      queueRef.current.push(audioBuffer);
-
-      if (!isPlayingRef.current) {
-        isPlayingRef.current = true;
-        setIsPlaying(true);
-        playNext();
-      }
+        if (!isPlayingRef.current) {
+          isPlayingRef.current = true;
+          setIsPlaying(true);
+          // In case the worklet was previously stopped, resume it
+          node.port.postMessage("resume");
+        }
+      });
     },
-    [getAudioContext, playNext]
+    [ensureWorklet]
   );
 
   const stopPlayback = useCallback(() => {
-    queueRef.current = [];
-
-    if (currentSourceRef.current) {
-      try {
-        currentSourceRef.current.onended = null;
-        currentSourceRef.current.stop();
-      } catch {
-        // source may already be stopped
-      }
-      currentSourceRef.current = null;
+    // Tell the worklet to flush its ring buffer and go silent
+    if (workletNodeRef.current) {
+      workletNodeRef.current.port.postMessage("stop");
     }
 
     isPlayingRef.current = false;
