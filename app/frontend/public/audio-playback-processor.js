@@ -1,31 +1,31 @@
 /**
  * AudioWorklet processor for gapless TTS playback.
  *
- * Maintains a ring buffer of Float32 samples. The main thread pushes
- * decoded PCM data via port.postMessage; the processor pulls samples
- * at the audio-thread sample rate (24 kHz) and writes them into the
- * output buffer continuously — eliminating the micro-gap clicks that
- * occur when chaining individual AudioBufferSourceNode instances.
+ * Uses a dynamically growing queue of Float32 chunks instead of a
+ * fixed-size ring buffer.  This avoids overflow when the main thread
+ * pushes audio faster than real-time (e.g. a 30-second TTS response
+ * arrives in < 1 second over WebSocket).
+ *
+ * The main thread is responsible for resampling from the TTS source
+ * sample rate (24 kHz) to the AudioContext sample rate before posting
+ * chunks here.
  */
 class PCM16PlaybackProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
 
-    // Ring buffer: 2 seconds at 24 kHz = 48000 samples
-    this._bufferSize = 48000;
-    this._buffer = new Float32Array(this._bufferSize);
-    this._writeIndex = 0;
-    this._readIndex = 0;
-    this._samplesAvailable = 0;
+    /** @type {Float32Array[]} */
+    this._queue = [];
+    /** Offset into the first chunk in _queue */
+    this._offset = 0;
     this._stopped = false;
     this._finished = false;
 
     this.port.onmessage = (event) => {
       if (event.data === "stop") {
         this._stopped = true;
-        this._samplesAvailable = 0;
-        this._readIndex = 0;
-        this._writeIndex = 0;
+        this._queue = [];
+        this._offset = 0;
         return;
       }
       if (event.data === "resume") {
@@ -34,19 +34,10 @@ class PCM16PlaybackProcessor extends AudioWorkletProcessor {
         return;
       }
 
-      // Incoming Float32Array of PCM samples
+      // Incoming Float32Array of PCM samples (already resampled)
       const samples = event.data;
-      if (!(samples instanceof Float32Array)) return;
-
-      for (let i = 0; i < samples.length; i++) {
-        if (this._samplesAvailable >= this._bufferSize) {
-          // Buffer full — drop oldest sample (overwrite)
-          this._readIndex = (this._readIndex + 1) % this._bufferSize;
-          this._samplesAvailable--;
-        }
-        this._buffer[this._writeIndex] = samples[i];
-        this._writeIndex = (this._writeIndex + 1) % this._bufferSize;
-        this._samplesAvailable++;
+      if (samples instanceof Float32Array && samples.length > 0) {
+        this._queue.push(samples);
       }
     };
   }
@@ -60,21 +51,35 @@ class PCM16PlaybackProcessor extends AudioWorkletProcessor {
     if (!output || output.length === 0) return true;
 
     const channel = output[0];
-    let hasData = false;
+    let written = 0;
 
-    for (let i = 0; i < channel.length; i++) {
-      if (this._samplesAvailable > 0) {
-        channel[i] = this._buffer[this._readIndex];
-        this._readIndex = (this._readIndex + 1) % this._bufferSize;
-        this._samplesAvailable--;
-        hasData = true;
-      } else {
-        channel[i] = 0;
+    while (written < channel.length && this._queue.length > 0) {
+      const chunk = this._queue[0];
+      const remaining = chunk.length - this._offset;
+      const needed = channel.length - written;
+      const toCopy = Math.min(remaining, needed);
+
+      // Copy samples from current chunk into the output
+      for (let i = 0; i < toCopy; i++) {
+        channel[written + i] = chunk[this._offset + i];
+      }
+      written += toCopy;
+      this._offset += toCopy;
+
+      // Move to next chunk if current is exhausted
+      if (this._offset >= chunk.length) {
+        this._queue.shift();
+        this._offset = 0;
       }
     }
 
-    // Notify main thread about buffer state for isPlaying tracking
-    if (hasData) {
+    // Fill any remaining output with silence
+    for (let i = written; i < channel.length; i++) {
+      channel[i] = 0;
+    }
+
+    // Notify main thread when buffer drains completely
+    if (written > 0) {
       this._finished = false;
     } else if (!this._finished) {
       this._finished = true;

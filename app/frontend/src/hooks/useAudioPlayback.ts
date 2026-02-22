@@ -8,6 +8,9 @@ interface UseAudioPlaybackReturn {
   stopPlayback: () => void;
 }
 
+/** TTS audio comes in at this sample rate from the backend (24 kHz). */
+const SOURCE_SAMPLE_RATE = 24000;
+
 function base64ToInt16Array(base64: string): Int16Array {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -26,12 +29,39 @@ function int16ToFloat32(int16: Int16Array): Float32Array {
 }
 
 /**
- * Gapless TTS audio playback using an AudioWorklet ring buffer.
+ * Linear-interpolation resample from srcRate to dstRate.
+ * Handles the common case where the browser's AudioContext runs at
+ * 44100 or 48000 Hz but TTS audio is 24000 Hz.
+ */
+function resample(
+  samples: Float32Array,
+  srcRate: number,
+  dstRate: number
+): Float32Array {
+  if (srcRate === dstRate) return samples;
+
+  const ratio = srcRate / dstRate;
+  const outLength = Math.ceil(samples.length / ratio);
+  const out = new Float32Array(outLength);
+
+  for (let i = 0; i < outLength; i++) {
+    const srcIdx = i * ratio;
+    const lo = Math.floor(srcIdx);
+    const hi = Math.min(lo + 1, samples.length - 1);
+    const frac = srcIdx - lo;
+    out[i] = samples[lo] + frac * (samples[hi] - samples[lo]);
+  }
+  return out;
+}
+
+/**
+ * Gapless TTS audio playback using an AudioWorklet queue.
  *
  * Instead of creating individual AudioBufferSourceNode instances per
  * chunk (which causes micro-gap clicks at boundaries), this approach
- * pushes decoded Float32 samples into an AudioWorklet that maintains
- * a continuous ring buffer and pulls samples at the audio-thread rate.
+ * pushes decoded & resampled Float32 samples into an AudioWorklet that
+ * maintains a dynamically growing queue and pulls samples at the
+ * audio-thread rate — gapless and overflow-proof.
  */
 export function useAudioPlayback(): UseAudioPlaybackReturn {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -49,18 +79,21 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
       workletNodeRef.current &&
       workletReadyRef.current
     ) {
-      // Resume context if it was suspended (e.g. after user gesture policy)
       if (audioContextRef.current.state === "suspended") {
         await audioContextRef.current.resume();
       }
       return workletNodeRef.current;
     }
 
-    // Create a new AudioContext at 24 kHz (matching TTS output)
-    const ctx = new AudioContext({ sampleRate: 24000 });
+    // Let the browser pick its preferred sample rate (usually 44100 or 48000).
+    // We resample TTS audio (24 kHz) to match on the main thread before
+    // posting to the worklet.
+    const ctx = new AudioContext();
     audioContextRef.current = ctx;
+    console.log(
+      `[AudioPlayback] AudioContext created at ${ctx.sampleRate} Hz`
+    );
 
-    // Load the playback worklet processor
     await ctx.audioWorklet.addModule("/audio-playback-processor.js");
 
     const node = new AudioWorkletNode(ctx, "pcm16-playback-processor", {
@@ -68,7 +101,6 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
     });
     node.connect(ctx.destination);
 
-    // Listen for "ended" messages (buffer drained, no more data)
     node.port.onmessage = (event: MessageEvent) => {
       if (event.data === "ended") {
         isPlayingRef.current = false;
@@ -86,15 +118,18 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
       const int16 = base64ToInt16Array(base64Data);
       const float32 = int16ToFloat32(int16);
 
-      // Fire-and-forget: ensure worklet is ready then push samples
       ensureWorklet().then((node) => {
-        // Transfer the float32 buffer to the worklet thread for zero-copy
-        node.port.postMessage(float32, [float32.buffer]);
+        const ctx = audioContextRef.current!;
+
+        // Resample from 24 kHz source to the AudioContext's actual rate
+        const resampled = resample(float32, SOURCE_SAMPLE_RATE, ctx.sampleRate);
+
+        // Transfer the buffer to the worklet thread (zero-copy)
+        node.port.postMessage(resampled, [resampled.buffer]);
 
         if (!isPlayingRef.current) {
           isPlayingRef.current = true;
           setIsPlaying(true);
-          // In case the worklet was previously stopped, resume it
           node.port.postMessage("resume");
         }
       });
@@ -103,11 +138,9 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
   );
 
   const stopPlayback = useCallback(() => {
-    // Tell the worklet to flush its ring buffer and go silent
     if (workletNodeRef.current) {
       workletNodeRef.current.port.postMessage("stop");
     }
-
     isPlayingRef.current = false;
     setIsPlaying(false);
   }, []);
