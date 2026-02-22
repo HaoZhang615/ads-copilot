@@ -81,11 +81,13 @@ async def _process_agent_response(
             if final_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
                 sentences = detect_sentence_boundaries(final_text)
-                for sentence in sentences:
+                logger.info("TTS: sending %d sentence(s) to VoiceLive", len(sentences))
+                for i, sentence in enumerate(sentences):
                     try:
+                        logger.debug("TTS sentence %d/%d: %.60s", i + 1, len(sentences), sentence)
                         await session.voicelive.send_tts_request(sentence)
                     except Exception:
-                        logger.warning("TTS request failed for sentence", exc_info=True)
+                        logger.warning("TTS request failed for sentence %d", i + 1, exc_info=True)
 
         except Exception:
             logger.exception("Error processing agent response")
@@ -154,6 +156,7 @@ async def _voicelive_listener(
             elif event_type == "response.audio.delta":
                 audio_data = event.get("delta", "")
                 if audio_data:
+                    logger.debug("TTS audio.delta received (%d chars)", len(audio_data))
                     await _send_msg(ws, TtsAudioMessage(data=audio_data).model_dump())
 
             elif event_type == "response.audio.done":

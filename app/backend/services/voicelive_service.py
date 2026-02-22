@@ -101,17 +101,35 @@ class VoiceLiveService:
             await self._connection.input_audio_buffer.append(audio=base64_data)
 
     async def send_tts_request(self, text: str) -> None:
-        if not self._connection or not self._connected:
-            return
+        """Ask VoiceLive to synthesise speech for the given text.
 
-        await self._connection.conversation.item.create(
-            item={
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "input_text", "text": text}],
+        Since VoiceLive couples LLM inference with TTS, we use
+        ``response.create`` with explicit ``input_items`` and
+        ``instructions`` to make the model repeat our text verbatim
+        as audio output.
+        """
+        if not self._connection or not self._connected:
+            logger.warning("TTS skipped — VoiceLive not connected")
+            return
+        logger.info("TTS request: %.80s…" if len(text) > 80 else "TTS request: %s", text)
+
+        await self._connection.response.create(
+            response={
+                "modalities": ["audio", "text"],
+                "instructions": (
+                    "Repeat the following user message exactly as written, "
+                    "word for word. Do not add, remove, or change any words. "
+                    "Do not add any commentary or preamble."
+                ),
+                "input_items": [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": text}],
+                    }
+                ],
             },
         )
-        await self._connection.response.create()
 
     async def receive_events(self) -> AsyncGenerator[dict[str, Any], None]:
         while self._connected or not self._event_queue.empty():
