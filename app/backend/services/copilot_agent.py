@@ -88,6 +88,7 @@ class CopilotAgent:
                 if content:
                     queue.put_nowait(content)
             elif event_type == "assistant.turn_end":
+                logger.info("Copilot turn ended")
                 queue.put_nowait(_STREAM_DONE)
             elif event_type == "session.error":
                 error_msg = event.data.message or "Unknown Copilot error"
@@ -101,8 +102,10 @@ class CopilotAgent:
                 # Tool calls (e.g. generate_architecture.py) produce
                 # events without text deltas — just reset the per-chunk
                 # timeout so we don't mistakenly abort.
-                logger.debug("Copilot tool event: %s", event_type)
+                logger.info("Copilot tool event: %s", event_type)
                 queue.put_nowait(None)  # keep-alive sentinel
+            else:
+                logger.info("Copilot event (unhandled): %s", event_type)
         unsubscribe = self._session.on(_event_handler)
 
         try:
@@ -111,9 +114,9 @@ class CopilotAgent:
 
             while True:
                 try:
-                    chunk = await asyncio.wait_for(queue.get(), timeout=300.0)
+                    chunk = await asyncio.wait_for(queue.get(), timeout=120.0)
                 except asyncio.TimeoutError:
-                    logger.warning("Copilot response timed out after 300s")
+                    logger.warning("Copilot response timed out after 120s")
                     break
 
                 if chunk is _STREAM_DONE:
