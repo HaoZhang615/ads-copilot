@@ -49,11 +49,17 @@ async def _handle_audio(ws: WebSocket, session: Session, msg: AudioMessage) -> N
 
 
 async def _cancel_tts(ws: WebSocket, session: Session) -> None:
-    """Signal TTS cancellation and notify the frontend to stop playback."""
-    if session.state == SessionState.SPEAKING:
-        session.tts_cancel_event.set()
-        await _send_msg(ws, TtsStopMessage().model_dump())
-        logger.info("Barge-in: TTS cancelled due to user speech")
+    """Signal TTS cancellation and notify the frontend to stop playback.
+
+    Always sends tts_stop to the frontend regardless of backend session
+    state, because the backend finishes sending all TTS chunks almost
+    instantly (they're pre-synthesized in memory) and transitions to IDLE
+    long before the frontend finishes playing.  The frontend worklet queue
+    may still have seconds of audio buffered.
+    """
+    session.tts_cancel_event.set()
+    await _send_msg(ws, TtsStopMessage().model_dump())
+    logger.info("Barge-in: TTS stop sent to frontend")
 
 
 async def _process_agent_response(
