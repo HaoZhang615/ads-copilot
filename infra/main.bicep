@@ -108,6 +108,10 @@ module backendApp 'modules/container-app.bicep' = {
         value: 'gpt-realtime'
       }
       {
+        name: 'AZURE_SPEECH_REGION'
+        value: location
+      }
+      {
         name: 'AZURE_CLIENT_ID'
         value: managedIdentity.outputs.clientId
       }

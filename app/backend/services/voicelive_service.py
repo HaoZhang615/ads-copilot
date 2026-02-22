@@ -4,7 +4,6 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from azure.ai.voicelive.aio import connect, VoiceLiveConnection
-from azure.ai.voicelive.models import InputTextContentPart, UserMessageItem
 from azure.identity.aio import DefaultAzureCredential
 
 from app.backend.config import settings
@@ -100,31 +99,6 @@ class VoiceLiveService:
     async def send_audio(self, base64_data: str) -> None:
         if self._connection and self._connected:
             await self._connection.input_audio_buffer.append(audio=base64_data)
-
-    async def send_tts_request(self, text: str) -> None:
-        """Ask VoiceLive to synthesise speech for the given text.
-        Since VoiceLive couples LLM inference with TTS, we inject the
-        text as a user conversation item, then call ``response.create``
-        with instructions to repeat it verbatim as audio output.
-        """
-        if not self._connection or not self._connected:
-            logger.warning("TTS skipped — VoiceLive not connected")
-            return
-        logger.info("TTS request: %.80s…" if len(text) > 80 else "TTS request: %s", text)
-        # Step 1: inject the text as a user message into the conversation
-        await self._connection.conversation.item.create(
-            item=UserMessageItem(content=[InputTextContentPart(text=text)]),
-        )
-
-        # Step 2: trigger a response with instructions to repeat verbatim
-        await self._connection.response.create(
-            response={"modalities": ["audio", "text"]},
-            additional_instructions=(
-                "Repeat the last user message exactly as written, "
-                "word for word. Do not add, remove, or change any words. "
-                "Do not add any commentary or preamble."
-            ),
-        )
 
     async def receive_events(self) -> AsyncGenerator[dict[str, Any], None]:
         while self._connected or not self._event_queue.empty():

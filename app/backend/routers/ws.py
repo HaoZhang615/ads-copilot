@@ -76,15 +76,15 @@ async def _process_agent_response(
                 await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
             session.conversation_history.append({"role": "assistant", "content": final_text})
 
-            # Request TTS for the response (only if VoiceLive is connected
-            # and there is actual text).
+            # Synthesize TTS via Azure Speech SDK
             if final_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
-                logger.info("TTS: sending full response to VoiceLive (%d chars)", len(final_text))
+                logger.info("TTS: synthesizing %d chars via Azure Speech SDK", len(final_text))
                 try:
-                    await session.voicelive.send_tts_request(final_text)
+                    async for audio_chunk in session.speech_tts.synthesize(final_text):
+                        await _send_msg(ws, TtsAudioMessage(data=audio_chunk).model_dump())
                 except Exception:
-                    logger.warning("TTS request failed", exc_info=True)
+                    logger.warning("TTS synthesis failed", exc_info=True)
 
         except Exception:
             logger.exception("Error processing agent response")
@@ -150,14 +150,6 @@ async def _voicelive_listener(
                 if text:
                     await _send_msg(ws, TranscriptMessage(text=text, is_final=False).model_dump())
 
-            elif event_type == "response.audio.delta":
-                audio_data = event.get("delta", "")
-                if audio_data:
-                    logger.debug("TTS audio.delta received (%d chars)", len(audio_data))
-                    await _send_msg(ws, TtsAudioMessage(data=audio_data).model_dump())
-
-            elif event_type == "response.audio.done":
-                await _set_state(ws, session, SessionState.IDLE)
 
             elif event_type == "error":
                 error_msg = event.get("error", {}).get("message", "VoiceLive error")

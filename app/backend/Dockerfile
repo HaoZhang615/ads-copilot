@@ -1,6 +1,14 @@
 FROM python:3.11-slim
 WORKDIR /workspace
 
+# Azure Speech SDK native dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libssl-dev \
+        libasound2 \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY app/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY databricks-ads-session /workspace/databricks-ads-session

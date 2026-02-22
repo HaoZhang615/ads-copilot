@@ -42,6 +42,19 @@ class CopilotAgent:
             "system_message": {"content": _SYSTEM_PROMPT},
         })
 
+        # Warm-up: send a hidden message to force skill loading so the
+        # first real user message doesn't stall.
+        logger.info("Copilot warm-up: priming session…")
+        try:
+            async for _ in self.send_message("hello"):
+                pass  # drain the response
+            logger.info("Copilot warm-up complete")
+            # Clear warm-up from history so it doesn't leak into the real conversation
+            self._conversation_history.clear()
+        except Exception:
+            logger.warning("Copilot warm-up failed (non-fatal)", exc_info=True)
+            self._conversation_history.clear()
+
     async def send_message(self, text: str) -> AsyncGenerator[str, None]:
         """Send a message and yield streaming delta chunks."""
         if not self._client or not self._session:

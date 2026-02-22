@@ -8,6 +8,7 @@ from app.backend.config import settings
 from app.backend.models.session_state import SessionState
 from app.backend.services.copilot_agent import CopilotAgent
 from app.backend.services.voicelive_service import VoiceLiveService
+from app.backend.services.speech_tts_service import SpeechTtsService
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class Session:
         self.user_id = user_id
         self.voicelive: VoiceLiveService = VoiceLiveService()
         self.copilot: CopilotAgent = CopilotAgent()
+        self.speech_tts: SpeechTtsService = SpeechTtsService()
         self.state: SessionState = SessionState.IDLE
         self.created_at: datetime = datetime.now(timezone.utc)
         self.last_activity: datetime = datetime.now(timezone.utc)
@@ -64,6 +66,14 @@ class SessionManager:
             await session.voicelive.close()
             raise
 
+        try:
+            await session.speech_tts.start()
+        except Exception:
+            logger.error("Speech TTS failed to start", exc_info=True)
+            await session.voicelive.close()
+            await session.copilot.stop()
+            raise
+
         self._sessions[session_id] = session
         self._user_sessions.setdefault(user_id, []).append(session_id)
 
@@ -97,6 +107,10 @@ class SessionManager:
             await session.copilot.stop()
         except Exception:
             logger.warning("Error stopping Copilot for session %s", session_id, exc_info=True)
+        try:
+            await session.speech_tts.close()
+        except Exception:
+            logger.warning("Error closing SpeechTTS for session %s", session_id, exc_info=True)
 
         logger.info("Cleaned up session %s", session_id)
 
