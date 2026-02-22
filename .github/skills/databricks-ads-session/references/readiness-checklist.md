@@ -46,7 +46,7 @@ Use sensible defaults without asking. Only probe if the conversation naturally r
 
 | Item | Default Assumption | Override Signal |
 |------|-------------------|-----------------|
-| **Workspace SKU** | Premium (required for Unity Catalog) | User mentions cost as primary concern → consider Standard for dev |
+| **Workspace SKU** | Premium (required for Unity Catalog). Standard tier retiring Oct 2026 — do not use for new deployments. | User has existing Standard workspaces → plan Premium migration before Oct 2026 |
 | **Monitoring tools** | Azure Monitor + Databricks system tables | User mentions Datadog, Splunk, Grafana → add integration |
 | **CI/CD tooling** | Azure DevOps Pipelines + DABs | User mentions GitHub Actions, GitLab CI → adjust |
 | **Cost optimization** | Standard autoscaling, serverless compute, no reserved capacity | User mentions budget constraints → add spot instances, auto-terminate |
@@ -56,10 +56,15 @@ Use sensible defaults without asking. Only probe if the conversation naturally r
 | **Disaster recovery** | Single-region, workspace backup | User needs multi-region → add replication design |
 | **Delta Lake optimization** | Liquid Clustering (CLUSTER BY AUTO), OPTIMIZE daily | User mentions specific performance issues → tune clustering keys |
 | **GenAI use case scope** | Not applicable (no GenAI) | User mentions chatbot, RAG, agents, LLM → probe knowledge sources, LLM choice, guardrails |
-| **LLM provider preference** | Azure OpenAI (GPT-4) | User mentions open-source models → add DBRX/Llama/Mistral via Model Serving |
+| **LLM provider preference** | Azure OpenAI (GPT-4.1 / GPT-5.2 / o3) | User mentions open-source models → add Meta Llama / Mistral / DBRX via Model Serving |
 | **AI agent complexity** | Single-shot RAG Q&A | User needs multi-turn agents, tool calling, or workflows → add Mosaic AI Agent Framework |
 | **Data application hosting** | No custom apps | User needs internal tools → add Databricks Apps; external-facing → add dedicated hosting |
 | **Lakebase / OLTP needs** | Not needed (analytical only) | User needs <10ms point lookups or OLTP → add Lakebase |
+| **Hive Metastore / DBFS dependency** | Unity Catalog only (new workspaces post Dec 2025 have no HMS/DBFS access) | Migrating legacy workloads with HMS dependencies → plan UC migration; legacy workspace may still have HMS |
+| **Workspace deployment model** | Serverless Workspace (GA Jan 2026) — zero-setup, serverless compute included | Complex networking or VNet injection required → Classic workspace |
+| **Databricks Runtime version** | DBR 17.3 LTS (Spark 4.0) | Spark 4.1 features needed → DBR 18.0 |
+| **Business user self-service** | Not applicable | Business analysts need self-service analytics → add Databricks One + AI/BI Genie |
+| **Table format strategy** | Delta Lake | Multi-engine or multi-cloud interop needed → Iceberg managed tables or UniForm |
 
 ## Pre-Generation Summary Template
 

@@ -6,7 +6,7 @@ Load this file when the user mentions a specific industry during Phase 1 (Contex
 
 **Key Data Sources**: Core banking systems, market data feeds (Bloomberg, Reuters), transaction logs, customer CRM, risk models, regulatory reports
 
-**Primary Workloads**: Fraud detection (real-time ML), risk modeling (batch), regulatory reporting (scheduled), market data processing (streaming), customer analytics, GenAI-powered document processing
+**Primary Workloads**: Fraud detection (real-time ML), risk modeling (batch), regulatory reporting (scheduled), market data processing (streaming), customer analytics, GenAI-powered document processing, agentic compliance monitoring
 
 **Compliance**: SOC2, PCI-DSS, SEC/FINRA regulations, Basel III/IV, DORA (EU)
 
@@ -19,6 +19,8 @@ Load this file when the user mentions a specific industry during Phase 1 (Contex
 - "How do you handle PII — tokenization, masking, or separate storage?"
 - "Is there a risk model library that needs GPU compute?"
 - "Are you exploring GenAI for regulatory document analysis, customer service agents, or compliance automation?"
+ "Would Mosaic AI Agent Bricks (no-code agent builder) work for compliance or customer service agents, or do you need custom agent framework code?"
+ "Do your agents need to connect to existing banking APIs or core systems? Managed MCP Servers provide standardized agent-to-tool connectivity."
 
 ---
 
@@ -39,6 +41,7 @@ Load this file when the user mentions a specific industry during Phase 1 (Contex
 - "Do you need de-identification pipelines for research datasets?"
 - "Is medical imaging in scope? What volume of DICOM data?"
 - "Are you exploring GenAI for clinical note summarization, medical coding assistance, or drug interaction analysis?"
+ "Would Agent Bricks (no-code) work for clinical documentation assistants, or do you need custom-built agents with specific medical knowledge guardrails?"
 
 ---
 
@@ -59,6 +62,7 @@ Load this file when the user mentions a specific industry during Phase 1 (Contex
 - "Is inventory data federated across stores/warehouses?"
 - "Do you need a customer 360 view? What identity resolution approach?"
 - "Are you exploring GenAI for product description generation, conversational shopping assistants, or customer support agents?"
+ "Do you need shopping agents that connect to inventory, pricing, and CRM systems? MCP Servers can standardize agent-to-tool connectivity across your retail stack."
 
 ---
 
@@ -79,6 +83,7 @@ Load this file when the user mentions a specific industry during Phase 1 (Contex
 - "Do you need a digital twin? What simulation platform?"
 - "Is OT/IT network convergence in scope, or are they air-gapped?"
 - "Are you exploring GenAI for maintenance procedure lookup, technician copilots, or root cause analysis from logs?"
+ "Do you need sub-second streaming from SCADA/PLC systems? Apache Flink on Databricks (managed) handles low-latency industrial event processing alongside Structured Streaming."
 
 ---
 

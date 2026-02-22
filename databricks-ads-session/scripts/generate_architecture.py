@@ -104,7 +104,7 @@ def generate_medallion(params: Dict[str, Any]) -> str:
 
 
 def generate_streaming(params: Dict[str, Any]) -> str:
-    """Streaming Lakehouse with Event Hubs and LakeFlow Declarative Pipelines."""
+    """Streaming Lakehouse with Event Hubs and LakeFlow Spark Declarative Pipelines."""
     include_serving_layer = params.get("include_serving_layer", True)
 
     serving_node = ""
@@ -125,8 +125,9 @@ def generate_streaming(params: Dict[str, Any]) -> str:
 
           subgraph DBX["Databricks Workspace"]
             SS[Structured Streaming]
+            FLINK[Apache Flink - Managed]
             UC[Unity Catalog]
-            subgraph LDP["LakeFlow Declarative Pipelines"]
+            subgraph LDP["LakeFlow Spark Declarative Pipelines"]
               BRONZE[(Bronze - Raw)]
               SILVER[(Silver - Validated)]
               GOLD[(Gold - Aggregated)]
@@ -139,6 +140,7 @@ def generate_streaming(params: Dict[str, Any]) -> str:
           DASH[Real-time Dashboards]
 
           IOT & APP & LOGS --> EH --> SS --> BRONZE
+          EH --> FLINK --> BRONZE
           BRONZE --> SILVER --> GOLD
           GOLD --> ADLS
           GOLD --> SQLWH --> DASH
@@ -148,7 +150,7 @@ def generate_streaming(params: Dict[str, Any]) -> str:
 
 
 def generate_ml_platform(params: Dict[str, Any]) -> str:
-    """ML & AI Platform with Feature Store, MLflow 3.0, and Model Serving."""
+    """ML & AI Platform with Feature Store, MLflow 3.0, Serverless GPU Compute, and Model Serving."""
     include_monitoring = params.get("include_monitoring", True)
 
     monitor_nodes = ""
@@ -179,7 +181,7 @@ def generate_ml_platform(params: Dict[str, Any]) -> str:
               FEAT_STORE[(Feature Store)]
             end
             subgraph MT["Model Training"]
-              TRAINING[Training Clusters]
+              TRAINING[Serverless GPU Compute]
               MLFLOW[MLflow 3.0 Experiments]
             end
             REGISTRY[Model Registry - UC]
@@ -329,7 +331,7 @@ def generate_dwh_replacement(params: Dict[str, Any]) -> str:
 
           subgraph DBX["Databricks Lakehouse"]
             subgraph ELT["ELT Pipelines"]
-              LDP[LakeFlow Declarative Pipelines]
+              LDP[LakeFlow Spark Declarative Pipelines]
               BRONZE[(Bronze)]
               SILVER[(Silver)]
               GOLD[(Gold)]
@@ -394,7 +396,7 @@ def generate_iot(params: Dict[str, Any]) -> str:
 
           subgraph DBX["Databricks Workspace"]
             SS[Structured Streaming]
-            subgraph LDP["LakeFlow Declarative Pipelines"]
+            subgraph LDP["LakeFlow Spark Declarative Pipelines"]
               RAW[(Raw Telemetry)]
               CLEAN[(Clean Readings)]
               AGG[(Aggregated Metrics)]
@@ -518,7 +520,7 @@ def generate_genai(params: Dict[str, Any]) -> str:
 
           subgraph LLM_PROVIDERS["LLM Providers"]
             LLM[{llm_provider}]
-            OSS_LLM[OSS Models - DBRX / Llama]
+            OSS_LLM[Meta Llama / Mistral / DBRX]
           end
 
           subgraph DBX["Databricks AI Workspace"]
@@ -530,6 +532,8 @@ def generate_genai(params: Dict[str, Any]) -> str:
               AF[Mosaic AI Agent Framework]
               AB[Agent Bricks - No Code]
               MLFLOW[MLflow 3.0 - Tracing]
+              TOOLS[Agent Tools - UC Functions]
+              MCP[Managed MCP Servers]
             end
             GATEWAY[Mosaic AI Gateway]
             UC[Unity Catalog]
@@ -543,6 +547,9 @@ def generate_genai(params: Dict[str, Any]) -> str:
 
           DOCS & DELTA & API_DATA --> CHUNK --> VS
           VS --> AF
+          AF --> TOOLS
+          MCP --> TOOLS
+          MCP --> VS
           AF --> MLFLOW --> SERVING
           AB --> SERVING
           LLM & OSS_LLM --> GATEWAY --> AF
@@ -563,12 +570,12 @@ PATTERNS = {
     },
     "streaming": {
         "fn": generate_streaming,
-        "desc": "Real-time streaming with Event Hubs and LakeFlow Declarative Pipelines",
+        "desc": "Real-time streaming with Event Hubs, LakeFlow Spark Declarative Pipelines, and Apache Flink",
         "params": "name, include_serving_layer (bool)",
     },
     "ml-platform": {
         "fn": generate_ml_platform,
-        "desc": "ML & AI platform with Feature Store, MLflow 3.0, Mosaic AI Gateway",
+        "desc": "ML & AI platform with Feature Store, MLflow 3.0, Serverless GPU Compute, Mosaic AI Gateway",
         "params": "name, include_monitoring (bool)",
     },
     "data-mesh": {
@@ -598,7 +605,7 @@ PATTERNS = {
     },
     "genai": {
         "fn": generate_genai,
-        "desc": "GenAI & AI Agent platform with Mosaic AI, Vector Search, Agent Framework",
+        "desc": "GenAI & AI Agent platform with Mosaic AI, Vector Search, Agent Framework, MCP Servers, and Agent Bricks",
         "params": 'name, include_evaluation (bool), llm_provider (str, default "Azure OpenAI")',
     },
 }

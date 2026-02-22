@@ -102,14 +102,14 @@ flowchart LR
 
 **Use when**: Real-time analytics, sub-minute latency requirements, click-stream, event processing, CDC pipelines.
 
-**Azure Components**: Event Hubs (or IoT Hub), ADLS Gen2, Databricks (Structured Streaming + LakeFlow Declarative Pipelines), SQL Warehouse, Key Vault
+**Azure Components**: Event Hubs (or IoT Hub), ADLS Gen2, Databricks (Structured Streaming + Apache Flink (managed) + LakeFlow Spark Declarative Pipelines), SQL Warehouse, Key Vault
 
 **Architecture**:
 ```
-Event Producers → Event Hubs → Databricks Structured Streaming → LakeFlow Declarative Pipelines
+Event Producers → Event Hubs → Databricks Structured Streaming → LakeFlow Spark Declarative Pipelines
 → Bronze/Silver/Gold in ADLS Gen2 → SQL Warehouse → Real-time Dashboards
+For sub-second latency or complex stateful processing, Apache Flink (managed) provides an alternative to Structured Streaming.
 ```
-
 **Diagram Code**:
 ```mermaid
 flowchart LR
@@ -123,8 +123,9 @@ flowchart LR
 
   subgraph DBX["Databricks Workspace"]
     SS[Structured Streaming]
+    FLINK[Apache Flink - Managed]
     UC[Unity Catalog]
-    subgraph LDP["LakeFlow Declarative Pipelines"]
+    subgraph LDP["LakeFlow Spark Declarative Pipelines"]
       BRONZE[(Bronze - Raw)]
       SILVER[(Silver - Validated)]
       GOLD[(Gold - Aggregated)]
@@ -137,6 +138,7 @@ flowchart LR
   DASH[Real-time Dashboards]
 
   IOT & APP & LOGS --> EH --> SS --> BRONZE
+  EH --> FLINK --> BRONZE
   BRONZE --> SILVER --> GOLD
   GOLD --> ADLS
   GOLD --> SQLWH --> DASH
@@ -150,11 +152,11 @@ flowchart LR
 
 **Use when**: Machine learning is the primary workload, need MLOps pipeline, model serving, feature engineering, Mosaic AI capabilities.
 
-**Azure Components**: ADLS Gen2, Databricks (ML Runtime + Feature Store + MLflow 3.0 + Mosaic AI), Model Serving (Serverless), Databricks Apps (optional for custom UIs), Key Vault
+**Azure Components**: ADLS Gen2, Databricks (ML Runtime + Feature Store + MLflow 3.0 + Mosaic AI), Serverless GPU Compute (managed, auto-scaling A10g/H100), Model Serving (Serverless), Databricks Apps (optional for custom UIs), Key Vault
 
 **Architecture**:
 ```
-Feature Data → Databricks Feature Store → Training Clusters (GPU optional)
+Feature Data → Databricks Feature Store → Serverless GPU Compute (managed, auto-scaling)
 → MLflow 3.0 Experiment Tracking → Model Registry → Model Serving Endpoints
 → Mosaic AI Gateway → Databricks Apps / External Applications
 ```
@@ -171,7 +173,7 @@ flowchart TB
       FEAT_STORE[(Feature Store)]
     end
     subgraph MT["Model Training"]
-      TRAINING[Training Clusters - GPU]
+      TRAINING[Serverless GPU Compute]
       MLFLOW[MLflow 3.0 Experiments]
     end
     REGISTRY[Model Registry - UC]
@@ -335,15 +337,16 @@ flowchart LR
 
 **Use when**: Replacing Snowflake, Synapse dedicated pools, Redshift, BigQuery, or Teradata with Databricks SQL.
 
-**Azure Components**: ADLS Gen2, LakeFlow Connect (or ADF for legacy), LakeFlow Declarative Pipelines, Databricks SQL Warehouse, dbt, Unity Catalog, Lakehouse Federation, Power BI
+**Azure Components**: ADLS Gen2, LakeFlow Connect (or ADF for legacy), LakeFlow Spark Declarative Pipelines, Databricks SQL Warehouse, dbt, Unity Catalog, Unity Catalog Metrics (semantic layer), Lakehouse Federation, Power BI
 
 **Architecture**:
 ```
-Sources → LakeFlow Connect / Auto Loader → ADLS Gen2 → LakeFlow Declarative Pipelines → Medallion layers
+Sources → LakeFlow Connect / Auto Loader → ADLS Gen2 → LakeFlow Spark Declarative Pipelines → Medallion layers
 → SQL Warehouse → BI Tools (Power BI / Tableau)
 Unity Catalog replaces source system's catalog. dbt replaces stored procedures.
 Lakehouse Federation enables querying legacy DWH during migration without ETL.
 Liquid Clustering replaces distribution keys and Z-ORDER.
+Unity Catalog Metrics defines business KPIs once, usable across SQL Warehouse, AI/BI Genie, and BI tools.
 ```
 
 **Diagram Code**:
@@ -360,13 +363,14 @@ flowchart LR
 
   subgraph DBX["Databricks Lakehouse"]
     subgraph ELT["ELT Pipelines"]
-      LDP[LakeFlow Declarative Pipelines]
+      LDP[LakeFlow Spark Declarative Pipelines]
       BRONZE[(Bronze)]
       SILVER[(Silver)]
       GOLD[(Gold)]
     end
     UC[Unity Catalog]
     FEDERATION[Lakehouse Federation]
+    METRICS[UC Metrics - Semantic Layer]
     subgraph SQLA["SQL Analytics"]
       SQLWH[SQL Warehouse - Serverless]
       SQLWH_PRO[SQL Warehouse - Pro]
@@ -388,7 +392,8 @@ flowchart LR
   LDP --> BRONZE --> SILVER --> GOLD
   UC -.->|governs| GOLD
   FEDERATION -.->|query legacy| DW_TABLES
-  GOLD --> SQLWH --> PBI & EXCEL
+  GOLD --> METRICS
+  METRICS --> SQLWH --> PBI & EXCEL
   GOLD --> SQLWH_PRO --> TABLEAU
   KV -.->|secrets| LDP
   ENTRA -.->|RBAC| UC
@@ -400,7 +405,7 @@ flowchart LR
 
 **Use when**: Device telemetry, sensor data, industrial IoT, smart building, fleet management.
 
-**Azure Components**: IoT Hub, Event Hubs, Databricks (Structured Streaming + LakeFlow Declarative Pipelines), ADLS Gen2, Azure Data Explorer (optional for time-series queries), Lakebase (optional for device state serving), Power BI
+**Azure Components**: IoT Hub, Event Hubs, Databricks (Structured Streaming + LakeFlow Spark Declarative Pipelines), ADLS Gen2, Azure Data Explorer (optional for time-series queries), Lakebase (optional for device state serving), Power BI
 
 **Architecture**:
 ```
@@ -423,7 +428,7 @@ flowchart LR
 
   subgraph DBX["Databricks Workspace"]
     SS[Structured Streaming]
-    subgraph LDP["LakeFlow Declarative Pipelines"]
+    subgraph LDP["LakeFlow Spark Declarative Pipelines"]
       RAW[(Raw Telemetry)]
       CLEAN[(Clean Readings)]
       AGG[(Aggregated Metrics)]
@@ -532,13 +537,15 @@ flowchart LR
 
 **Use when**: Generative AI applications, RAG chatbots, AI agents, document intelligence, LLM-powered workflows, compound AI systems.
 
-**Azure Components**: ADLS Gen2, Databricks (Mosaic AI Agent Framework + AI Gateway + Vector Search + Model Serving), Unity Catalog (for data + model governance), LakeFlow Declarative Pipelines (document processing), Databricks Apps (agent UI hosting)
+**Azure Components**: ADLS Gen2, Databricks (Mosaic AI Agent Framework + AI Gateway + Vector Search + Model Serving), Unity Catalog (for data + model governance), LakeFlow Spark Declarative Pipelines (document processing), Managed MCP Servers (agent-tool connectivity), Agent Bricks (no-code agents: Knowledge Assistant, Supervisor Agent), Databricks Apps (agent UI hosting)
 
 **Architecture**:
 ```
-Data Sources → LakeFlow Declarative Pipelines (Document Processing) → Delta Tables + Vector Index
+Data Sources → LakeFlow Spark Declarative Pipelines (Document Processing) → Delta Tables + Vector Index
 → Mosaic AI Agent Framework (Agent Logic) → AI Gateway (LLM Routing + Guardrails)
 → Model Serving Endpoints → Databricks Apps / External Applications
+MCP (Model Context Protocol) is the standard protocol for connecting agents to external tools and data sources.
+Agent Bricks provides no-code agent creation: Knowledge Assistant for document Q&A, Supervisor Agent for multi-agent orchestration.
 Unity Catalog governs data, models, and agent definitions. MLflow 3.0 traces agent execution.
 ```
 
@@ -554,7 +561,7 @@ flowchart TB
 
   subgraph DBX["Databricks Workspace"]
     subgraph INGEST["Document Processing"]
-      LDP[LakeFlow Declarative Pipelines]
+      LDP[LakeFlow Spark Declarative Pipelines]
       CHUNK[Chunking & Embedding]
     end
     subgraph STORE["Knowledge Layer"]
@@ -566,6 +573,8 @@ flowchart TB
       FRAMEWORK[Mosaic AI Agent Framework]
       GATEWAY[AI Gateway]
       TOOLS[Agent Tools & Functions]
+      MCP[Managed MCP Servers]
+      AB[Agent Bricks - No Code]
     end
     subgraph SERVE["Serving Layer"]
       ENDPOINT[Model Serving - Serverless]
@@ -574,8 +583,8 @@ flowchart TB
   end
 
   subgraph LLM["LLM Providers"]
-    DBRX[DBRX / Llama / Mistral]
-    OPENAI[Azure OpenAI]
+    OSS[Meta Llama / Mistral / DBRX]
+    OPENAI[Azure OpenAI - GPT-4.1 / GPT-5.2 / o3]
     EXTERNAL[External LLMs]
   end
 
@@ -599,13 +608,57 @@ flowchart TB
   DELTA --> FRAMEWORK
   FRAMEWORK --> TOOLS
   FRAMEWORK --> GATEWAY
-  GATEWAY --> DBRX & OPENAI & EXTERNAL
+  GATEWAY --> OSS & OPENAI & EXTERNAL
   FRAMEWORK --> ENDPOINT --> APPS & CUSTOM & TEAMS
   ENDPOINT --> MLFLOW
   MLFLOW --> EVAL
   ENDPOINT --> MONITOR
   GATEWAY --> GUARD
+  MCP --> TOOLS
+  MCP --> VS
 ```
+
+---
+
+## Cross-Cutting Concern: Open Table Formats
+
+All patterns above default to **Delta Lake** as the table format. In multi-engine or multi-cloud environments, address the table format question explicitly:
+
+| Scenario | Recommendation |
+|----------|---------------|
+| All-in on Databricks | Delta Lake (default). Use UniForm for Iceberg client compatibility. |
+| Databricks + Snowflake coexistence | Iceberg managed tables in Unity Catalog. Both engines read natively. |
+| Multi-cloud with different query engines | Iceberg for portability. Unity Catalog Iceberg REST API for governance. |
+| Avoiding vendor lock-in | Iceberg + Apache Polaris catalog. Databricks reads via Iceberg Catalog Federation. |
+| Sharing data with external parties | Delta Sharing (supports both Delta and Iceberg clients as of Dec 2025). |
+
+**Key products**:
+- **UniForm**: Zero-copy Delta↔Iceberg interoperability. Delta tables automatically readable as Iceberg by external engines.
+- **Iceberg Managed Tables**: Unity Catalog-managed Iceberg tables with Liquid Clustering and Predictive Optimization.
+- **Compatibility Mode**: Read-only copy of UC tables auto-synced for external engines (Athena, Snowflake, Fabric) without data copying.
+- **Iceberg Catalog Federation**: Govern Iceberg tables in AWS Glue, Hive Metastore, or Snowflake without moving data.
+
+---
+
+## Cross-Cutting Concern: FinOps & Cost Optimization
+
+Every architecture pattern should include cost design as a first-class concern. Address these in every ADS session:
+
+| Design Decision | Cost-Optimized Choice | When to Override |
+|----------------|----------------------|-----------------|
+| Compute type | Serverless (SQL Warehouse, Jobs) — pay per use | Sustained high-concurrency → Provisioned Pro |
+| ML training compute | Serverless GPU Compute — no idle cost | Large-scale distributed training → reserved GPU clusters |
+| Batch workloads | Spot instances + auto-termination policies | SLA-critical jobs that cannot tolerate preemption |
+| Cluster sizing | Start small, auto-scale up | Known steady-state workloads → right-size from start |
+| Storage tiering | Hot (ADLS Gen2) for active, Cool/Archive for historical | All data accessed frequently → keep on Hot |
+| SQL Warehouse sizing | Serverless (auto-scales to zero) | Predictable high load → Pro with reserved capacity |
+
+**Key practices**:
+- **Tag everything**: Environment, team, cost-center, workload tags on clusters, jobs, and warehouses for chargeback.
+- **Unity Catalog lineage for cost attribution**: Trace which teams and data products consume compute.
+- **Databricks system tables**: Query `system.billing.usage` for DBU consumption by workspace, cluster, and user.
+- **Photon engine**: Enable for SQL-heavy workloads (2-8x faster, fewer DBUs per query). Skip for Python-heavy notebooks.
+- **Auto-termination**: Enforce via cluster policies — default 15-30 minutes for interactive, immediate for jobs.
 
 ---
 
@@ -625,5 +678,6 @@ Most real-world architectures combine 2-3 patterns. Common combinations:
 | DW Replacement | + Streaming | Near-real-time dashboards |
 | ML Platform | + GenAI Platform | Classical ML + generative AI serving |
 | Data Mesh | + GenAI Platform | Domain-specific AI agents with governance |
+| Any Pattern | + FinOps Design | Cost-optimized architecture with chargeback |
 
 When combining, use a single diagram with merged subgraphs. Avoid duplicating shared components (ADLS, Unity Catalog, Key Vault, Entra ID).
