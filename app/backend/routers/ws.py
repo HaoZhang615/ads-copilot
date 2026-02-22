@@ -153,6 +153,10 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
         if session.state == SessionState.LISTENING:
             await _set_state(ws, session, SessionState.IDLE)
 
+    elif msg.action == "tts_stop":
+        # User explicitly pressed stop audio button
+        await _cancel_tts(ws, session)
+
 
 async def _voicelive_listener(
     ws: WebSocket,

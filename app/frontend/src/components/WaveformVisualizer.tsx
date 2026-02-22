@@ -26,7 +26,7 @@ export function WaveformVisualizer({
         return (
           <div
             key={i}
-            className="w-1 rounded-full bg-red-400 transition-all duration-75"
+            className="w-1 rounded-full bg-[var(--danger)] transition-all duration-75"
             style={{
               height: `${Math.max(baseHeight, staggeredHeight)}px`,
               animationDelay: `${delay}s`,

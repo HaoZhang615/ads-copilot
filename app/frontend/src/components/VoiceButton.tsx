@@ -22,16 +22,16 @@ export function VoiceButton({
         onClick={onClick}
         disabled={disabled}
         aria-label={isListening ? "Stop recording" : "Start recording"}
-        className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[var(--background)] ${
+        className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--background)] ${
           disabled
             ? "bg-gray-700 text-gray-500 cursor-not-allowed"
             : isListening
-              ? "bg-red-600 text-white hover:bg-red-700"
-              : "bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)]"
+              ? "bg-[var(--danger)] text-white hover:bg-[#e02e1a]"
+              : "bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--accent)]/10 border border-[var(--border)]"
         }`}
       >
         {isListening && (
-          <span className="absolute inset-0 rounded-full bg-red-500 animate-pulse-ring" />
+          <span className="absolute inset-0 rounded-full bg-[var(--danger)] animate-pulse-ring" />
         )}
         <svg
           xmlns="http://www.w3.org/2000/svg"

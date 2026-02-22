@@ -23,7 +23,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       <div
         className={`${isUser ? "max-w-[75%]" : "max-w-[90%]"} rounded-2xl px-4 py-3 ${
           isUser
-            ? "bg-blue-600 text-white rounded-br-md"
+            ? "bg-[var(--accent)] text-white rounded-br-md"
             : "bg-[var(--surface)] text-[var(--foreground)] rounded-bl-md border border-[var(--border)]"
         }`}
       >
@@ -109,7 +109,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 underline"
+                    className="text-[var(--accent-light)] underline hover:text-[var(--accent)]"
                   >
                     {children}
                   </a>
@@ -118,7 +118,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   <hr className="border-[var(--border)] my-2" />
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-2 border-[var(--border)] pl-3 italic opacity-80 mb-2">
+                  <blockquote className="border-l-2 border-[var(--accent)] pl-3 italic opacity-80 mb-2">
                     {children}
                   </blockquote>
                 ),
@@ -127,7 +127,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               {message.content}
             </ReactMarkdown>
             {message.isStreaming && (
-              <span className="inline-block w-2 h-4 ml-1 bg-current rounded-sm animate-blink align-middle" />
+              <span className="inline-block w-2 h-4 ml-1 bg-[var(--accent)] rounded-sm animate-blink align-middle" />
             )}
           </div>
         )}

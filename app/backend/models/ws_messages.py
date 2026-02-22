@@ -12,7 +12,7 @@ class AudioMessage(BaseModel):
 
 class ControlMessage(BaseModel):
     type: Literal["control"] = "control"
-    action: Literal["start_listening", "stop_listening", "start_session", "end_session"]
+    action: Literal["start_listening", "stop_listening", "start_session", "end_session", "tts_stop"]
 
 
 class TextMessage(BaseModel):

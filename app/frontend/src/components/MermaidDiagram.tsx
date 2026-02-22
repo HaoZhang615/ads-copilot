@@ -31,12 +31,12 @@ function DiagramModal({ svg, onClose }: { svg: string; onClose: () => void }) {
     >
       <div className="relative w-[95vw] h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col">
         {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--accent)]/20 shrink-0">
           <span className="text-sm font-medium text-gray-700">Architecture Diagram</span>
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-[var(--accent)] transition-colors"
             aria-label="Close"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
@@ -139,7 +139,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent-light)] transition-colors"
           title="View full screen"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -153,7 +153,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
         <button
           type="button"
           onClick={() => downloadMmd(code)}
-          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent-light)] transition-colors"
           title="Download .mmd file"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -166,7 +166,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
         <button
           type="button"
           onClick={() => setShowCode((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent-light)] transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
             <polyline points="16 18 22 12 16 6" />

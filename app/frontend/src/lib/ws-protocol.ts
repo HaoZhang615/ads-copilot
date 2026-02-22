@@ -9,7 +9,7 @@ export type OutgoingAudioMessage = {
 
 export type OutgoingControlMessage = {
   type: "control";
-  action: "start_listening" | "stop_listening" | "start_session" | "end_session";
+  action: "start_listening" | "stop_listening" | "start_session" | "end_session" | "tts_stop";
 };
 
 export type OutgoingTextMessage = {

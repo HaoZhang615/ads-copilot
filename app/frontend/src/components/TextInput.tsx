@@ -36,7 +36,7 @@ export function TextInput({ onSend, disabled }: TextInputProps) {
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder="Type a message..."
-        className="flex-1 bg-[var(--surface)] text-[var(--foreground)] placeholder-[var(--muted)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 bg-[var(--surface)] text-[var(--foreground)] placeholder-[var(--muted)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
         aria-label="Message input"
       />
       <button
@@ -44,7 +44,7 @@ export function TextInput({ onSend, disabled }: TextInputProps) {
         onClick={handleSend}
         disabled={disabled || !value.trim()}
         aria-label="Send message"
-        className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[var(--background)]"
+        className="flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--background)]"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

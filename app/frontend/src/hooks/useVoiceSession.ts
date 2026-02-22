@@ -23,10 +23,12 @@ interface UseVoiceSessionReturn {
   isConnected: boolean;
   audioLevel: number;
   isCapturing: boolean;
+  isPlaying: boolean;
   startSession: () => void;
   endSession: () => void;
   toggleListening: () => void;
   sendTextMessage: (text: string) => void;
+  stopAudio: () => void;
 }
 
 const DEFAULT_WS_URL = "ws://localhost:8000/ws";
@@ -49,7 +51,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   const { isCapturing, audioLevel, startCapture, stopCapture } =
     useAudioCapture();
-  const { enqueueAudio, stopPlayback } = useAudioPlayback();
+  const { isPlaying, enqueueAudio, stopPlayback } = useAudioPlayback();
 
   handleMessageRef.current = (msg: IncomingMessage) => {
     switch (msg.type) {
@@ -224,15 +226,22 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     wsRef.current?.send({ type: "text", content: text });
   }, []);
 
+  const stopAudio = useCallback(() => {
+    stopPlayback();
+    wsRef.current?.send({ type: "control", action: "tts_stop" });
+  }, [stopPlayback]);
+
   return {
     messages,
     sessionState,
     isConnected,
     audioLevel,
     isCapturing,
+    isPlaying,
     startSession,
     endSession,
     toggleListening,
     sendTextMessage,
+    stopAudio,
   };
 }
