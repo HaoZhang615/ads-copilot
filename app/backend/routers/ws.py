@@ -18,7 +18,7 @@ from app.backend.models.ws_messages import (
     TranscriptMessage,
     TtsAudioMessage,
 )
-from app.backend.services.audio_utils import detect_sentence_boundaries
+
 from app.backend.services.session_manager import Session, session_manager
 
 logger = logging.getLogger(__name__)
@@ -80,14 +80,11 @@ async def _process_agent_response(
             # and there is actual text).
             if final_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
-                sentences = detect_sentence_boundaries(final_text)
-                logger.info("TTS: sending %d sentence(s) to VoiceLive", len(sentences))
-                for i, sentence in enumerate(sentences):
-                    try:
-                        logger.debug("TTS sentence %d/%d: %.60s", i + 1, len(sentences), sentence)
-                        await session.voicelive.send_tts_request(sentence)
-                    except Exception:
-                        logger.warning("TTS request failed for sentence %d", i + 1, exc_info=True)
+                logger.info("TTS: sending full response to VoiceLive (%d chars)", len(final_text))
+                try:
+                    await session.voicelive.send_tts_request(final_text)
+                except Exception:
+                    logger.warning("TTS request failed", exc_info=True)
 
         except Exception:
             logger.exception("Error processing agent response")

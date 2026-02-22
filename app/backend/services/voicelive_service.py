@@ -102,33 +102,31 @@ class VoiceLiveService:
 
     async def send_tts_request(self, text: str) -> None:
         """Ask VoiceLive to synthesise speech for the given text.
-
-        Since VoiceLive couples LLM inference with TTS, we use
-        ``response.create`` with explicit ``input_items`` and
-        ``instructions`` to make the model repeat our text verbatim
-        as audio output.
+        Since VoiceLive couples LLM inference with TTS, we inject the
+        text as a user conversation item, then call ``response.create``
+        with instructions to repeat it verbatim as audio output.
         """
         if not self._connection or not self._connected:
             logger.warning("TTS skipped — VoiceLive not connected")
             return
         logger.info("TTS request: %.80s…" if len(text) > 80 else "TTS request: %s", text)
-
-        await self._connection.response.create(
-            response={
-                "modalities": ["audio", "text"],
-                "instructions": (
-                    "Repeat the following user message exactly as written, "
-                    "word for word. Do not add, remove, or change any words. "
-                    "Do not add any commentary or preamble."
-                ),
-                "input_items": [
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": text}],
-                    }
-                ],
+        # Step 1: inject the text as a user message into the conversation
+        await self._connection.conversation.item.create(
+            item={
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": text}],
             },
+        )
+
+        # Step 2: trigger a response with instructions to repeat verbatim
+        await self._connection.response.create(
+            response={"modalities": ["audio", "text"]},
+            additional_instructions=(
+                "Repeat the last user message exactly as written, "
+                "word for word. Do not add, remove, or change any words. "
+                "Do not add any commentary or preamble."
+            ),
         )
 
     async def receive_events(self) -> AsyncGenerator[dict[str, Any], None]:
