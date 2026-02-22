@@ -62,6 +62,10 @@ function resample(
  * pushes decoded & resampled Float32 samples into an AudioWorklet that
  * maintains a dynamically growing queue and pulls samples at the
  * audio-thread rate — gapless and overflow-proof.
+ *
+ * A promise-based lock ensures that only ONE AudioContext + WorkletNode
+ * is ever created, even when many tts_audio chunks arrive concurrently
+ * before initialization completes.
  */
 export function useAudioPlayback(): UseAudioPlaybackReturn {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -69,15 +73,21 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const isPlayingRef = useRef(false);
-  const workletReadyRef = useRef(false);
+
+  /**
+   * Initialization lock: a single shared promise that all concurrent
+   * callers of ensureWorklet() will await.  Prevents the race where
+   * many rapid tts_audio messages each trigger a separate AudioContext
+   * creation (= "two soundtracks" bug).
+   */
+  const initPromiseRef = useRef<Promise<AudioWorkletNode> | null>(null);
 
   const ensureWorklet = useCallback(async (): Promise<AudioWorkletNode> => {
-    // Re-use existing context and worklet node if still alive
+    // Fast path: already initialised and alive
     if (
       audioContextRef.current &&
       audioContextRef.current.state !== "closed" &&
-      workletNodeRef.current &&
-      workletReadyRef.current
+      workletNodeRef.current
     ) {
       if (audioContextRef.current.state === "suspended") {
         await audioContextRef.current.resume();
@@ -85,32 +95,50 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
       return workletNodeRef.current;
     }
 
-    // Let the browser pick its preferred sample rate (usually 44100 or 48000).
-    // We resample TTS audio (24 kHz) to match on the main thread before
-    // posting to the worklet.
-    const ctx = new AudioContext();
-    audioContextRef.current = ctx;
-    console.log(
-      `[AudioPlayback] AudioContext created at ${ctx.sampleRate} Hz`
-    );
+    // If an initialisation is already in flight, piggyback on it
+    if (initPromiseRef.current) {
+      return initPromiseRef.current;
+    }
 
-    await ctx.audioWorklet.addModule("/audio-playback-processor.js");
+    // Start a new initialisation and store the promise so concurrent
+    // callers share the same one
+    const promise = (async () => {
+      // Let the browser pick its preferred sample rate (usually 44100
+      // or 48000).  We resample TTS audio (24 kHz) on the main thread
+      // before posting to the worklet.
+      const ctx = new AudioContext();
+      audioContextRef.current = ctx;
+      console.log(
+        `[AudioPlayback] AudioContext created at ${ctx.sampleRate} Hz`
+      );
 
-    const node = new AudioWorkletNode(ctx, "pcm16-playback-processor", {
-      outputChannelCount: [1],
-    });
-    node.connect(ctx.destination);
+      await ctx.audioWorklet.addModule("/audio-playback-processor.js");
 
-    node.port.onmessage = (event: MessageEvent) => {
-      if (event.data === "ended") {
-        isPlayingRef.current = false;
-        setIsPlaying(false);
-      }
-    };
+      const node = new AudioWorkletNode(ctx, "pcm16-playback-processor", {
+        outputChannelCount: [1],
+      });
+      node.connect(ctx.destination);
 
-    workletNodeRef.current = node;
-    workletReadyRef.current = true;
-    return node;
+      node.port.onmessage = (event: MessageEvent) => {
+        if (event.data === "ended") {
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        }
+      };
+
+      workletNodeRef.current = node;
+      return node;
+    })();
+
+    initPromiseRef.current = promise;
+
+    try {
+      return await promise;
+    } catch (err) {
+      // Reset so a future call can retry
+      initPromiseRef.current = null;
+      throw err;
+    }
   }, []);
 
   const enqueueAudio = useCallback(
