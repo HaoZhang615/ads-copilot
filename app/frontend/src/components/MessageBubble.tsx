@@ -3,6 +3,7 @@
 import type { Message } from "@/hooks/useVoiceSession";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MermaidDiagram } from "./MermaidDiagram";
 
 interface MessageBubbleProps {
   message: Message;
@@ -20,7 +21,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       className={`flex w-full ${isUser ? "justify-end" : "justify-start"} mb-3`}
     >
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-3 ${
+        className={`${isUser ? "max-w-[75%]" : "max-w-[90%]"} rounded-2xl px-4 py-3 ${
           isUser
             ? "bg-blue-600 text-white rounded-br-md"
             : "bg-[var(--surface)] text-[var(--foreground)] rounded-bl-md border border-[var(--border)]"
@@ -82,7 +83,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   </td>
                 ),
                 code: ({ className, children }) => {
+                  const isMermaid = className === "language-mermaid";
                   const isBlock = className?.startsWith("language-");
+                  if (isMermaid) {
+                    /* Extract raw text from React children */
+                    const raw = String(children).replace(/\n$/, "");
+                    return <MermaidDiagram code={raw} />;
+                  }
                   if (isBlock) {
                     return (
                       <pre className="bg-black/30 rounded-lg p-3 overflow-x-auto mb-2 text-xs">
