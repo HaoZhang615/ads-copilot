@@ -5,7 +5,7 @@ param location string = resourceGroup().location
 param backendImageName string = ''
 param frontendImageName string = ''
 @secure()
-param githubToken string
+param copilotGithubToken string
 param azureVoiceliveEndpoint string
 
 var abbrevs = {
@@ -69,7 +69,7 @@ module keyVault 'modules/key-vault.bicep' = {
     name: '${abbrevs.keyVault}-${environmentName}'
     location: location
     principalId: managedIdentity.outputs.principalId
-    githubToken: githubToken
+    copilotGithubToken: copilotGithubToken
   }
 }
 
@@ -88,12 +88,10 @@ module backendApp 'modules/container-app.bicep' = {
     name: '${abbrevs.backendApp}-${environmentName}-backend'
     location: location
     containerAppsEnvironmentId: containerAppsEnv.outputs.id
-    containerRegistryName: containerRegistry.outputs.name
     containerRegistryLoginServer: containerRegistry.outputs.loginServer
     imageName: backendImageName
     targetPort: 8000
     managedIdentityId: managedIdentity.outputs.id
-    managedIdentityClientId: managedIdentity.outputs.clientId
     healthProbePath: '/health'
     env: [
       {
@@ -125,14 +123,14 @@ module backendApp 'modules/container-app.bicep' = {
         value: 'https://${abbrevs.frontendApp}-${environmentName}-frontend.${containerAppsEnv.outputs.defaultDomain}'
       }
       {
-        name: 'GITHUB_TOKEN'
-        secretRef: 'github-token'
+        name: 'COPILOT_GITHUB_TOKEN'
+        secretRef: 'copilot-github-token'
       }
     ]
     secrets: [
       {
-        name: 'github-token'
-        keyVaultUrl: '${keyVault.outputs.vaultUri}secrets/github-token'
+        name: 'copilot-github-token'
+        keyVaultUrl: '${keyVault.outputs.vaultUri}secrets/copilot-github-token'
         identity: managedIdentity.outputs.id
       }
     ]
@@ -148,12 +146,10 @@ module frontendApp 'modules/container-app.bicep' = {
     name: '${abbrevs.frontendApp}-${environmentName}-frontend'
     location: location
     containerAppsEnvironmentId: containerAppsEnv.outputs.id
-    containerRegistryName: containerRegistry.outputs.name
     containerRegistryLoginServer: containerRegistry.outputs.loginServer
     imageName: frontendImageName
     targetPort: 3000
     managedIdentityId: managedIdentity.outputs.id
-    managedIdentityClientId: managedIdentity.outputs.clientId
     healthProbePath: '/'
     env: [
       {

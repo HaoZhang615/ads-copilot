@@ -94,9 +94,9 @@ class SessionManager:
             logger.warning("Error closing VoiceLive for session %s", session_id, exc_info=True)
 
         try:
-            await session.copilot.close()
+            await session.copilot.stop()
         except Exception:
-            logger.warning("Error closing Copilot for session %s", session_id, exc_info=True)
+            logger.warning("Error stopping Copilot for session %s", session_id, exc_info=True)
 
         logger.info("Cleaned up session %s", session_id)
 

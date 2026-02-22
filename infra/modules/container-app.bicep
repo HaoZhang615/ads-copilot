@@ -1,12 +1,10 @@
 param name string
 param location string
 param containerAppsEnvironmentId string
-param containerRegistryName string
 param containerRegistryLoginServer string
 param imageName string
 param targetPort int
 param managedIdentityId string
-param managedIdentityClientId string
 param env array = []
 param secrets array = []
 param isExternal bool = true

@@ -2,7 +2,7 @@ param name string
 param location string
 param principalId string
 @secure()
-param githubToken string
+param copilotGithubToken string
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
@@ -17,11 +17,11 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource copilotGithubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
-  name: 'github-token'
+  name: 'copilot-github-token'
   properties: {
-    value: githubToken
+    value: copilotGithubToken
   }
 }
 

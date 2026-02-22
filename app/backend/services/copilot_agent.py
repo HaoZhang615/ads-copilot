@@ -1,8 +1,8 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
 
-from github_copilot_sdk import CopilotClient
+from copilot import CopilotClient, CopilotSession, SessionEvent
 
 from app.backend.config import settings
 
@@ -16,40 +16,79 @@ _SYSTEM_PROMPT = (
 
 _SKILL_DIRECTORIES = ["./databricks-ads-session"]
 
+# Sentinel to signal end of streaming
+_STREAM_DONE = object()
+
 
 class CopilotAgent:
     def __init__(self) -> None:
         self._client: CopilotClient | None = None
-        self._session_id: str | None = None
+        self._session: CopilotSession | None = None
         self._conversation_history: list[dict[str, str]] = []
+        self._unsubscribe: callable | None = None
 
     async def start(self) -> None:
-        self._client = CopilotClient(token=settings.github_token)
+        options: dict = {}
+        if settings.copilot_github_token:
+            options["github_token"] = settings.copilot_github_token
+            options["use_logged_in_user"] = False
+
+        self._client = CopilotClient(options or None)
         await self._client.start()
 
-        session = await self._client.create_session({
+        self._session = await self._client.create_session({
             "model": "claude-sonnet-4.6",
             "skill_directories": _SKILL_DIRECTORIES,
-            "system_prompt": _SYSTEM_PROMPT,
+            "system_message": {"content": _SYSTEM_PROMPT},
         })
-        self._session_id = session.get("session_id") or session.get("id")
 
     async def send_message(self, text: str) -> AsyncGenerator[str, None]:
-        if not self._client or not self._session_id:
+        """Send a message and yield streaming delta chunks."""
+        if not self._client or not self._session:
             raise RuntimeError("CopilotAgent not started")
 
         self._conversation_history.append({"role": "user", "content": text})
 
+        queue: asyncio.Queue = asyncio.Queue()
         full_response: list[str] = []
-        async for chunk in self._client.send_message(
-            session_id=self._session_id,
-            message=text,
-            stream=True,
-        ):
-            content = _extract_content(chunk)
-            if content:
-                full_response.append(content)
-                yield content
+
+        def _event_handler(event: SessionEvent) -> None:
+            if event.type.value == "assistant.message_delta":
+                delta = event.data.delta_content or ""
+                if delta:
+                    queue.put_nowait(delta)
+            elif event.type.value == "assistant.message":
+                # Full message (non-delta) — might arrive if not streaming
+                content = event.data.content or ""
+                if content:
+                    queue.put_nowait(content)
+            elif event.type.value == "assistant.turn_end":
+                queue.put_nowait(_STREAM_DONE)
+            elif event.type.value == "session.error":
+                error_msg = event.data.message or "Unknown Copilot error"
+                logger.error("Copilot session error: %s", error_msg)
+                queue.put_nowait(_STREAM_DONE)
+
+        unsubscribe = self._session.on(_event_handler)
+
+        try:
+            # send() returns a message ID, streaming happens via events
+            await self._session.send({"prompt": text})
+
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(queue.get(), timeout=120.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Copilot response timed out after 120s")
+                    break
+
+                if chunk is _STREAM_DONE:
+                    break
+
+                full_response.append(chunk)
+                yield chunk
+        finally:
+            unsubscribe()
 
         self._conversation_history.append({
             "role": "assistant",
@@ -60,23 +99,17 @@ class CopilotAgent:
     def conversation_history(self) -> list[dict[str, str]]:
         return self._conversation_history
 
-    async def close(self) -> None:
+    async def stop(self) -> None:
+        if self._session:
+            try:
+                await self._session.destroy()
+            except Exception:
+                logger.warning("Error destroying Copilot session", exc_info=True)
+            self._session = None
+
         if self._client:
             try:
-                await self._client.close()
+                self._client.stop()
             except Exception:
-                logger.warning("Error closing CopilotClient", exc_info=True)
+                logger.warning("Error stopping CopilotClient", exc_info=True)
             self._client = None
-            self._session_id = None
-
-
-def _extract_content(chunk: Any) -> str:
-    if isinstance(chunk, str):
-        return chunk
-    if isinstance(chunk, dict):
-        return chunk.get("content", "") or chunk.get("text", "") or chunk.get("delta", "")
-    if hasattr(chunk, "content"):
-        return chunk.content or ""
-    if hasattr(chunk, "delta"):
-        return chunk.delta or ""
-    return str(chunk) if chunk else ""

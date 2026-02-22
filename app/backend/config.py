@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     azure_voicelive_endpoint: str = ""
     azure_voicelive_api_version: str = "2025-10-01"
     azure_voicelive_model: str = "gpt-4o"
-    github_token: str = ""
+    copilot_github_token: str = ""
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     cors_origins: str = "http://localhost:3000"
