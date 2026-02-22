@@ -52,7 +52,7 @@ class VoiceLiveService:
                 "turn_detection": {
                     "type": "azure_semantic_vad",
                     "create_response": False,
-                    "silence_duration_ms": 500,
+                    "silence_duration_ms": 1500,
                     "remove_filler_words": True,
                 },
                 "input_audio_noise_reduction": {
