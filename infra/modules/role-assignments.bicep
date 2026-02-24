@@ -30,6 +30,17 @@ resource azureAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
     principalType: 'ServicePrincipal'
   }
 }
+
+// Cognitive Services Speech User — required for Speech TTS Avatar relay token endpoint
+resource cognitiveServicesSpeechUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(cognitiveServicesAccount.id, principalId, 'f2dc8367-1007-4938-bd23-fe263f013447')
+  scope: cognitiveServicesAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'f2dc8367-1007-4938-bd23-fe263f013447')
+    principalId: principalId
+    principalType: 'ServicePrincipal'
+  }
+}
 resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(acr.id, principalId, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
   scope: acr

@@ -17,10 +17,21 @@ export type OutgoingTextMessage = {
   content: string;
 };
 
+export type OutgoingAvatarOfferMessage = {
+  type: "avatar_offer";
+  sdp: string;
+};
+
+export type OutgoingAvatarIceRequestMessage = {
+  type: "avatar_ice_request";
+};
+
 export type OutgoingMessage =
   | OutgoingAudioMessage
   | OutgoingControlMessage
-  | OutgoingTextMessage;
+  | OutgoingTextMessage
+  | OutgoingAvatarOfferMessage
+  | OutgoingAvatarIceRequestMessage;
 
 export type IncomingTranscriptMessage = {
   type: "transcript";
@@ -54,13 +65,34 @@ export type IncomingErrorMessage = {
   message: string;
 };
 
+export type IncomingAvatarAnswerMessage = {
+  type: "avatar_answer";
+  sdp: string;
+  ice_servers: Array<{ urls: string[]; username: string; credential: string }>;
+};
+
+export type IncomingAvatarIceMessage = {
+  type: "avatar_ice";
+  ice_servers: Array<{ urls: string[]; username: string; credential: string }>;
+};
+
+export type IncomingAvatarStateMessage = {
+  type: "avatar_state";
+  state: AvatarState;
+};
+
+export type AvatarState = "idle" | "connecting" | "speaking" | "disconnected";
+
 export type IncomingMessage =
   | IncomingTranscriptMessage
   | IncomingAgentTextMessage
   | IncomingTtsAudioMessage
   | IncomingTtsStopMessage
   | IncomingStateMessage
-  | IncomingErrorMessage;
+  | IncomingErrorMessage
+  | IncomingAvatarAnswerMessage
+  | IncomingAvatarIceMessage
+  | IncomingAvatarStateMessage;
 
 type MessageHandler = (msg: IncomingMessage) => void;
 

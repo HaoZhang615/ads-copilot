@@ -5,6 +5,7 @@ import { useVoiceSession } from "@/hooks/useVoiceSession";
 import { MessageBubble } from "@/components/MessageBubble";
 import { VoiceButton } from "@/components/VoiceButton";
 import { TextInput } from "@/components/TextInput";
+import { AvatarPanel } from "@/components/AvatarPanel";
 import type { SessionState } from "@/lib/ws-protocol";
 
 const STATE_LABELS: Record<SessionState, string> = {
@@ -105,6 +106,39 @@ function StopAudioButton({
   );
 }
 
+/** Toggle switch for lite (text-only) conversation mode. */
+function LiteModeToggle({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1.5 cursor-pointer select-none" title={enabled ? "Voice & avatar disabled" : "Voice & avatar enabled"}>
+      <span className="text-xs text-[var(--muted)] hidden sm:inline">
+        {enabled ? "Lite" : "Full"}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Toggle lite conversation mode"
+        onClick={() => onChange(!enabled)}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-1 focus:ring-offset-[var(--background)] ${
+          enabled ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform duration-200 ${
+            enabled ? "translate-x-[18px]" : "translate-x-[3px]"
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
 export function ChatInterface() {
   const {
     messages,
@@ -118,6 +152,12 @@ export function ChatInterface() {
     toggleListening,
     sendTextMessage,
     stopAudio,
+    avatarState,
+    avatarVideoRef,
+    avatarAudioRef,
+    avatarHasActivated,
+    liteMode,
+    setLiteMode,
   } = useVoiceSession();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -136,10 +176,11 @@ export function ChatInterface() {
 
   const inputDisabled =
     sessionState === "thinking" || sessionState === "speaking";
-  const showStopButton = isPlaying || sessionState === "speaking";
+  const showStopButton = !liteMode && (isPlaying || sessionState === "speaking");
+  const showAvatar = !liteMode && (avatarState !== "disconnected" || avatarHasActivated);
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto">
+    <div className="flex flex-col h-full max-w-6xl mx-auto">
       {/* Header with Azure + Databricks branding */}
       <header className="flex items-center justify-between px-6 py-3 border-b-2 border-[var(--accent)]" style={{ borderImage: "linear-gradient(to right, #0078D4, #FF3621) 1" }}>
         <div className="flex items-center gap-3">
@@ -176,6 +217,8 @@ export function ChatInterface() {
               {isConnected ? "Connected" : "Disconnected"}
             </span>
           </div>
+          <div className="h-4 w-px bg-[var(--border)]" />
+          <LiteModeToggle enabled={liteMode} onChange={setLiteMode} />
           {sessionState !== "idle" && (
             <button
               type="button"
@@ -188,61 +231,107 @@ export function ChatInterface() {
         </div>
       </header>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="flex items-center gap-4 mb-6">
-              <AzureLogo className="w-12 h-12" />
-              <span className="text-2xl text-[var(--border)] font-light select-none">×</span>
-              <DatabricksLogo className="w-12 h-12" />
-            </div>
-            <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
-              Azure Databricks
-            </h2>
-            <h3 className="text-lg text-[var(--accent-light)] mb-3">
-              Architecture Design Session
-            </h3>
-            <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed">
-              Voice-enabled AI assistant for designing your Databricks solution
-              architecture. Start by speaking or typing below.
-            </p>
-            <div className="mt-6 flex items-center gap-2 text-xs text-[var(--muted)]">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-4 h-4"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-              Click the microphone to begin a voice session
-            </div>
+      {/* Two-panel layout: avatar (left) + chat (right) */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+        {/* Avatar panel — visible once avatar has been used at least once (hidden in lite mode) */}
+        {showAvatar && (
+          <div className="p-4 lg:py-6 lg:pl-6 flex items-start justify-center lg:justify-start">
+            <AvatarPanel
+              avatarState={avatarState}
+              videoRef={avatarVideoRef}
+              audioRef={avatarAudioRef}
+            />
           </div>
         )}
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Input bar */}
-      <div className="border-t border-[var(--border)] px-6 py-4">
-        <div className="flex items-center gap-3">
-          <TextInput onSend={sendTextMessage} disabled={inputDisabled} />
-          <StopAudioButton onClick={stopAudio} visible={showStopButton} />
-          <VoiceButton
-            isListening={isCapturing}
-            audioLevel={audioLevel}
-            disabled={!isConnected}
-            onClick={toggleListening}
-          />
+        {/* Chat column */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="flex items-center gap-4 mb-6">
+                  <AzureLogo className="w-12 h-12" />
+                  <span className="text-2xl text-[var(--border)] font-light select-none">×</span>
+                  <DatabricksLogo className="w-12 h-12" />
+                </div>
+                <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
+                  Azure Databricks
+                </h2>
+                <h3 className="text-lg text-[var(--accent-light)] mb-3">
+                  Architecture Design Session
+                </h3>
+                {liteMode ? (
+                  <>
+                    <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed">
+                      Text-based AI assistant for designing your Databricks solution
+                      architecture. Type your message below to begin.
+                    </p>
+                    <div className="mt-6 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-4 h-4"
+                      >
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Lite mode — voice and avatar disabled
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed">
+                      Voice-enabled AI assistant for designing your Databricks solution
+                      architecture. Start by speaking or typing below.
+                    </p>
+                    <div className="mt-6 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-4 h-4"
+                      >
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" x2="12" y1="19" y2="22" />
+                      </svg>
+                      Click the microphone to begin a voice session
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+          {/* Input bar */}
+          <div className="border-t border-[var(--border)] px-6 py-4">
+            <div className="flex items-center gap-3">
+              <TextInput onSend={sendTextMessage} disabled={inputDisabled} />
+              {!liteMode && (
+                <>
+                  <StopAudioButton onClick={stopAudio} visible={showStopButton} />
+                  <VoiceButton
+                    isListening={isCapturing}
+                    audioLevel={audioLevel}
+                    disabled={!isConnected}
+                    onClick={toggleListening}
+                  />
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
