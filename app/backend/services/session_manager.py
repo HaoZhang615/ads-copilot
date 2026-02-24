@@ -17,14 +17,16 @@ _CLEANUP_INTERVAL_SECONDS = 60
 
 
 class Session:
-    def __init__(self, session_id: str, user_id: str) -> None:
+    def __init__(self, session_id: str, user_id: str, *, lite_mode: bool = False) -> None:
         self.session_id = session_id
         self.user_id = user_id
-        self.voicelive: VoiceLiveService = VoiceLiveService()
+        self.lite_mode = lite_mode
+        # In lite mode, voice/TTS/avatar services are not initialised.
+        self.voicelive: VoiceLiveService | None = None if lite_mode else VoiceLiveService()
         self.copilot: CopilotAgent = CopilotAgent()
-        self.speech_tts: SpeechTtsService = SpeechTtsService()
+        self.speech_tts: SpeechTtsService | None = None if lite_mode else SpeechTtsService()
         self.avatar_tts: AvatarTtsService | None = (
-            AvatarTtsService() if settings.avatar_enabled else None
+            None if lite_mode else (AvatarTtsService() if settings.avatar_enabled else None)
         )
         self.state: SessionState = SessionState.IDLE
         self.created_at: datetime = datetime.now(timezone.utc)
@@ -51,35 +53,34 @@ class SessionManager:
     async def start(self) -> None:
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
-    async def create_session(self, user_id: str) -> Session:
+    async def create_session(self, user_id: str, *, lite_mode: bool = False) -> Session:
         user_session_ids = self._user_sessions.get(user_id, [])
         if len(user_session_ids) >= settings.max_sessions_per_user:
             oldest_id = user_session_ids[0]
             await self.cleanup_session(oldest_id)
-
         session_id = str(uuid.uuid4())
-        session = Session(session_id=session_id, user_id=user_id)
-
-        try:
-            await session.voicelive.connect()
-        except Exception:
-            logger.warning("VoiceLive connection failed, session will operate without voice", exc_info=True)
-
+        session = Session(session_id=session_id, user_id=user_id, lite_mode=lite_mode)
+        if session.voicelive is not None:
+            try:
+                await session.voicelive.connect()
+            except Exception:
+                logger.warning("VoiceLive connection failed, session will operate without voice", exc_info=True)
         try:
             await session.copilot.start()
         except Exception:
             logger.error("Copilot agent failed to start", exc_info=True)
-            await session.voicelive.close()
+            if session.voicelive is not None:
+                await session.voicelive.close()
             raise
-
-        try:
-            await session.speech_tts.start()
-        except Exception:
-            logger.error("Speech TTS failed to start", exc_info=True)
-            await session.voicelive.close()
-            await session.copilot.stop()
-            raise
-
+        if session.speech_tts is not None:
+            try:
+                await session.speech_tts.start()
+            except Exception:
+                logger.error("Speech TTS failed to start", exc_info=True)
+                if session.voicelive is not None:
+                    await session.voicelive.close()
+                await session.copilot.stop()
+                raise
         if session.avatar_tts is not None:
             try:
                 await session.avatar_tts.start()
@@ -89,11 +90,10 @@ class SessionManager:
                     exc_info=True,
                 )
                 session.avatar_tts = None
-
         self._sessions[session_id] = session
         self._user_sessions.setdefault(user_id, []).append(session_id)
-
-        logger.info("Created session %s for user %s", session_id, user_id)
+        mode_label = "lite" if lite_mode else "full"
+        logger.info("Created %s session %s for user %s", mode_label, session_id, user_id)
         return session
 
     def get_session(self, session_id: str) -> Session:
@@ -114,19 +114,20 @@ class SessionManager:
         if not user_ids:
             self._user_sessions.pop(session.user_id, None)
 
-        try:
-            await session.voicelive.close()
-        except Exception:
-            logger.warning("Error closing VoiceLive for session %s", session_id, exc_info=True)
-
+        if session.voicelive is not None:
+            try:
+                await session.voicelive.close()
+            except Exception:
+                logger.warning("Error closing VoiceLive for session %s", session_id, exc_info=True)
         try:
             await session.copilot.stop()
         except Exception:
             logger.warning("Error stopping Copilot for session %s", session_id, exc_info=True)
-        try:
-            await session.speech_tts.close()
-        except Exception:
-            logger.warning("Error closing SpeechTTS for session %s", session_id, exc_info=True)
+        if session.speech_tts is not None:
+            try:
+                await session.speech_tts.close()
+            except Exception:
+                logger.warning("Error closing SpeechTTS for session %s", session_id, exc_info=True)
         if session.avatar_tts is not None:
             try:
                 await session.avatar_tts.close()

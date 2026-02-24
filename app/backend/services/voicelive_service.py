@@ -19,6 +19,7 @@ class VoiceLiveService:
         self._credential: DefaultAzureCredential | None = None
         self._connection: VoiceLiveConnection | None = None
         self._connected = False
+        self._reconnecting = False
         self._receive_task: asyncio.Task[None] | None = None
         self._event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._ctx_manager: Any = None
@@ -98,7 +99,57 @@ class VoiceLiveService:
 
     async def send_audio(self, base64_data: str) -> None:
         if self._connection and self._connected:
-            await self._connection.input_audio_buffer.append(audio=base64_data)
+            try:
+                await self._connection.input_audio_buffer.append(audio=base64_data)
+            except Exception as exc:
+                # Detect closed/closing transport and trigger reconnection
+                exc_str = str(exc).lower()
+                if "closing" in exc_str or "closed" in exc_str:
+                    logger.warning("VoiceLive transport closed during send_audio, reconnecting")
+                    self._connected = False
+                    await self.ensure_connected()
+                else:
+                    raise
+
+    async def ensure_connected(self) -> None:
+        """Verify the VoiceLive connection is alive; reconnect if not.
+
+        Safe to call multiple times concurrently — only one reconnection
+        attempt will run at a time.
+        """
+        if self._connected:
+            return
+        if self._reconnecting:
+            # Another coroutine is already reconnecting; wait for it
+            for _ in range(50):  # up to 5s
+                await asyncio.sleep(0.1)
+                if self._connected:
+                    return
+            return
+        self._reconnecting = True
+        try:
+            # Clean up stale connection before reconnecting
+            await self._close_connection()
+            await self._attempt_reconnect()
+        finally:
+            self._reconnecting = False
+
+    async def _close_connection(self) -> None:
+        """Tear down the existing connection resources without resetting credential."""
+        if self._receive_task and not self._receive_task.done():
+            self._receive_task.cancel()
+            try:
+                await self._receive_task
+            except asyncio.CancelledError:
+                pass
+            self._receive_task = None
+        if self._ctx_manager:
+            try:
+                await self._ctx_manager.__aexit__(None, None, None)
+            except Exception:
+                logger.debug("Error closing stale VoiceLive connection", exc_info=True)
+            self._ctx_manager = None
+            self._connection = None
 
     async def receive_events(self) -> AsyncGenerator[dict[str, Any], None]:
         while self._connected or not self._event_queue.empty():

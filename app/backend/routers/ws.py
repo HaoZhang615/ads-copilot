@@ -38,13 +38,56 @@ _incoming_adapter = TypeAdapter(IncomingMessage)
 # This prevents the avatar / audio TTS from reading out Mermaid diagrams,
 # JSON snippets, or other code that the chat UI renders visually.
 _CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```", re.MULTILINE)
+# Parenthetical source citations: "(Source: [label](url))" or "(Source: url)"
+_SOURCE_CITATION_RE = re.compile(
+    r"\(Source:\s*"           # literal "(Source:"
+    r"(?:\[[^\]]*\]\([^)]*\)"  # markdown link [label](url)
+    r"|[^)]+)"                # or bare text/url
+    r"\)",                    # closing paren
+    re.IGNORECASE,
+)
+
+# Standalone markdown links: [label](url) -> keep label only
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+
+# Bare URLs: remove the entire sentence/clause containing a bare URL.
+# This avoids orphaned filler like "See also: for more details." after the
+# URL is stripped.  The URL part uses (?:[^\s.]|\.[^\s])+ so that a period
+# is consumed only when followed by a non-space char (e.g. delta.io) — a
+# sentence-ending period ('. ') is NOT swallowed.
+_BARE_URL_SENTENCE_RE = re.compile(r"[^\n.]*https?://(?:[^\s.]|\.[^\s])+[^\n.]*\.?")
+# Standalone "Sources:" lines (e.g. "Sources: Link1 . Link2")
+# These appear at the end of MCP-grounded responses as a references block.
+_SOURCES_LINE_RE = re.compile(r"^Sources?:\s*.*$", re.IGNORECASE | re.MULTILINE)
+
+# Markdown emphasis: **bold**, *italic*, __bold__, _italic_
+# Strip the markers but keep the enclosed text.
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC_RE = re.compile(r"\*(.+?)\*")
+_MD_BOLD2_RE = re.compile(r"__(.+?)__")
+_MD_ITALIC2_RE = re.compile(r"_(.+?)_")
 
 
-def _strip_code_blocks(text: str) -> str:
-    """Remove fenced code blocks and collapse excess whitespace for TTS."""
+def _strip_for_tts(text: str) -> str:
+    """Remove code blocks, source citations, URLs, and markdown for natural TTS."""
     cleaned = _CODE_BLOCK_RE.sub("", text)
+    # Remove full "(Source: ...)" parenthetical citations
+    cleaned = _SOURCE_CITATION_RE.sub("", cleaned)
+    # Remove standalone "Sources: ..." reference lines
+    cleaned = _SOURCES_LINE_RE.sub("", cleaned)
+    # Convert remaining markdown links to just their label text
+    cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
+    # Remove entire sentences/clauses that contain bare URLs
+    cleaned = _BARE_URL_SENTENCE_RE.sub("", cleaned)
+    # Strip markdown emphasis markers (keep enclosed text)
+    cleaned = _MD_BOLD_RE.sub(r"\1", cleaned)
+    cleaned = _MD_BOLD2_RE.sub(r"\1", cleaned)
+    cleaned = _MD_ITALIC_RE.sub(r"\1", cleaned)
+    cleaned = _MD_ITALIC2_RE.sub(r"\1", cleaned)
     # Collapse runs of 3+ newlines into 2 (paragraph break)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    # Collapse multiple spaces left by removals
+    cleaned = re.sub(r"  +", " ", cleaned)
     return cleaned.strip()
 
 async def _send_msg(ws: WebSocket, data: dict[str, Any]) -> None:
@@ -60,6 +103,8 @@ async def _set_state(ws: WebSocket, session: Session, state: SessionState) -> No
 
 
 async def _handle_audio(ws: WebSocket, session: Session, msg: AudioMessage) -> None:
+    if session.voicelive is None:
+        return
     try:
         await session.voicelive.send_audio(msg.data)
     except Exception:
@@ -170,12 +215,17 @@ async def _process_agent_response(
                 await _send_msg(ws, AgentTextMessage(text=chunk, is_final=False).model_dump())
 
             final_text = "".join(full_response)
-            if final_text:
-                await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
+            # Always send is_final so the frontend clears its tracking ref.
+            # Without this, if the agent produces no text (e.g. only tool
+            # calls), currentAssistantIdRef on the frontend stays stale and
+            # the next response's chunks get appended to the wrong bubble.
+            await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
             session.conversation_history.append({"role": "assistant", "content": final_text})
 
-            # Strip code blocks (Mermaid, JSON, etc.) so TTS doesn't read them aloud
-            tts_text = _strip_code_blocks(final_text) if final_text else ""
+            # In lite mode, skip all TTS / avatar speech.
+            tts_text = ""
+            if not session.lite_mode:
+                tts_text = _strip_for_tts(final_text) if final_text else ""
             if tts_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
                 # Clear cancellation flag before starting TTS
@@ -207,21 +257,28 @@ async def _process_agent_response(
                             AvatarStateMessage(state="speaking").model_dump(),
                         )
                         await session.avatar_tts.speak(tts_text)
-                        # Disconnect after speech to stop billing
-                        await session.avatar_tts.disconnect_avatar()
-                        session.avatar_ready_event.clear()
+                        # Keep avatar connected for the next turn to avoid
+                        # 4429 throttling from rapid connect/disconnect cycles.
+                        # The connection is torn down on barge-in (_cancel_tts)
+                        # or session cleanup.
                         await _send_msg(
                             ws,
-                            AvatarStateMessage(state="disconnected").model_dump(),
+                            AvatarStateMessage(state="idle").model_dump(),
                         )
                     except Exception:
                         logger.warning("Avatar speak failed", exc_info=True)
+                        # Connection may be broken — disconnect and let next
+                        # turn reconnect.
+                        try:
+                            await session.avatar_tts.disconnect_avatar()
+                        except Exception:
+                            pass
                         session.avatar_ready_event.clear()
                         await _send_msg(
                             ws,
                             AvatarStateMessage(state="disconnected").model_dump(),
                         )
-                else:
+                elif session.speech_tts is not None:
                     # Regular audio path: stream TTS chunks to frontend
                     logger.info(
                         "TTS: synthesizing %d chars via Azure Speech SDK",
@@ -275,6 +332,13 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
     elif msg.action == "start_listening":
         # User started mic capture — cancel any ongoing TTS (barge-in)
         await _cancel_tts(ws, session)
+        # Ensure VoiceLive connection is healthy before audio flows
+        if session.voicelive is not None:
+            try:
+                await session.voicelive.ensure_connected()
+            except Exception:
+                logger.warning("VoiceLive reconnect on start_listening failed", exc_info=True)
+                await _send_msg(ws, ErrorMessage(message="Voice connection lost. Please try again.").model_dump())
         await _set_state(ws, session, SessionState.LISTENING)
 
     elif msg.action == "stop_listening":
@@ -357,17 +421,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     try:
         user_id = websocket.query_params.get("user_id", "anonymous")
-        session = await session_manager.create_session(user_id)
-
+        lite_mode = websocket.query_params.get("lite", "").lower() in ("1", "true")
+        session = await session_manager.create_session(user_id, lite_mode=lite_mode)
         await _send_msg(websocket, {
             "type": "session_created",
             "session_id": session.session_id,
+            "lite_mode": session.lite_mode,
         })
         await _send_msg(websocket, StateMessage(state=session.state).model_dump())
-
-        voicelive_task = asyncio.create_task(
-            _voicelive_listener(websocket, session, agent_lock),
-        )
+        # VoiceLive listener is only needed in full (non-lite) mode.
+        if session.voicelive is not None:
+            voicelive_task = asyncio.create_task(
+                _voicelive_listener(websocket, session, agent_lock),
+            )
 
         while True:
             raw = await websocket.receive_text()

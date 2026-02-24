@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 _ICE_TOKEN_REFRESH_SECONDS = 60 * 60 * 23  # ~23 hours
 _AVATAR_CONNECT_TIMEOUT = 30  # seconds to wait for avatar WebRTC handshake
+_AVATAR_RETRY_MAX = 3  # max retries for transient errors (e.g. 4429 throttling)
+_AVATAR_RETRY_BASE_DELAY = 2.0  # base delay in seconds (exponential backoff)
 
 
 class AvatarTtsService:
@@ -183,30 +185,51 @@ class AvatarTtsService:
             return remote_sdp
 
         logger.info("Avatar connect_avatar: running _do_connect in executor with %ds timeout", _AVATAR_CONNECT_TIMEOUT)
-        try:
-            remote_sdp = await asyncio.wait_for(
-                loop.run_in_executor(None, _do_connect),
-                timeout=_AVATAR_CONNECT_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            logger.error("Avatar connect_avatar: timed out after %ds", _AVATAR_CONNECT_TIMEOUT)
-            await self.disconnect_avatar()
-            raise RuntimeError(f"Avatar connection timed out after {_AVATAR_CONNECT_TIMEOUT}s")
-        except Exception:
-            logger.error("Avatar connect_avatar: _do_connect failed, cleaning up", exc_info=True)
-            await self.disconnect_avatar()
-            raise
+        last_error: Exception | None = None
+        for attempt in range(1, _AVATAR_RETRY_MAX + 1):
+            try:
+                remote_sdp = await asyncio.wait_for(
+                    loop.run_in_executor(None, _do_connect),
+                    timeout=_AVATAR_CONNECT_TIMEOUT,
+                )
+                break  # success
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Avatar connect_avatar: timed out after %ds (attempt %d/%d)",
+                    _AVATAR_CONNECT_TIMEOUT, attempt, _AVATAR_RETRY_MAX,
+                )
+                await self.disconnect_avatar()
+                last_error = RuntimeError(
+                    f"Avatar connection timed out after {_AVATAR_CONNECT_TIMEOUT}s"
+                )
+            except Exception as exc:
+                logger.error(
+                    "Avatar connect_avatar: _do_connect failed (attempt %d/%d)",
+                    attempt, _AVATAR_RETRY_MAX, exc_info=True,
+                )
+                await self.disconnect_avatar()
+                last_error = exc
+                # Only retry on throttling (4429) errors
+                if "4429" not in str(exc):
+                    raise
 
+            if attempt < _AVATAR_RETRY_MAX:
+                delay = _AVATAR_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.info("Avatar connect_avatar: retrying in %.1fs", delay)
+                await asyncio.sleep(delay)
+                # Re-clean before retry
+                if self._connected or self._synthesizer:
+                    await self.disconnect_avatar()
+            else:
+                raise last_error  # type: ignore[misc]
         self._connected = True
         logger.info("Avatar connected successfully")
-
         ice = self._ice_token or {}
         ice_servers = [{
             "urls": ice.get("Urls", []),
             "username": ice.get("Username", ""),
             "credential": ice.get("Password", ""),
         }]
-
         return remote_sdp, ice_servers
 
     async def speak(self, text: str) -> None:
