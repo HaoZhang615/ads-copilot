@@ -6,6 +6,10 @@ param backendImageName string = ''
 param frontendImageName string = ''
 @secure()
 param copilotGithubToken string
+param avatarEnabled bool = true
+param avatarCharacter string = 'lisa'
+param avatarStyle string = 'casual-sitting'
+param avatarVoice string = 'en-US-AvaMultilingualNeural'
 
 
 var abbrevs = {
@@ -134,6 +138,22 @@ module backendApp 'modules/container-app.bicep' = {
       {
         name: 'COPILOT_GITHUB_TOKEN'
         secretRef: 'copilot-github-token'
+      }
+      {
+        name: 'AVATAR_ENABLED'
+        value: string(avatarEnabled)
+      }
+      {
+        name: 'AVATAR_CHARACTER'
+        value: avatarCharacter
+      }
+      {
+        name: 'AVATAR_STYLE'
+        value: avatarStyle
+      }
+      {
+        name: 'AVATAR_VOICE'
+        value: avatarVoice
       }
     ]
     secrets: [

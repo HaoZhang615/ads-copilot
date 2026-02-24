@@ -8,6 +8,7 @@ from app.backend.config import settings
 from app.backend.models.session_state import SessionState
 from app.backend.services.copilot_agent import CopilotAgent
 from app.backend.services.voicelive_service import VoiceLiveService
+from app.backend.services.avatar_tts_service import AvatarTtsService
 from app.backend.services.speech_tts_service import SpeechTtsService
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,16 @@ class Session:
         self.voicelive: VoiceLiveService = VoiceLiveService()
         self.copilot: CopilotAgent = CopilotAgent()
         self.speech_tts: SpeechTtsService = SpeechTtsService()
+        self.avatar_tts: AvatarTtsService | None = (
+            AvatarTtsService() if settings.avatar_enabled else None
+        )
         self.state: SessionState = SessionState.IDLE
         self.created_at: datetime = datetime.now(timezone.utc)
         self.last_activity: datetime = datetime.now(timezone.utc)
         self.conversation_history: list[dict[str, Any]] = []
         self.turn_count: int = 0
         self.tts_cancel_event: asyncio.Event = asyncio.Event()
+        self.avatar_ready_event: asyncio.Event = asyncio.Event()
 
     def touch(self) -> None:
         self.last_activity = datetime.now(timezone.utc)
@@ -75,6 +80,16 @@ class SessionManager:
             await session.copilot.stop()
             raise
 
+        if session.avatar_tts is not None:
+            try:
+                await session.avatar_tts.start()
+            except Exception:
+                logger.warning(
+                    "Avatar TTS failed to start, session will operate without avatar",
+                    exc_info=True,
+                )
+                session.avatar_tts = None
+
         self._sessions[session_id] = session
         self._user_sessions.setdefault(user_id, []).append(session_id)
 
@@ -112,6 +127,11 @@ class SessionManager:
             await session.speech_tts.close()
         except Exception:
             logger.warning("Error closing SpeechTTS for session %s", session_id, exc_info=True)
+        if session.avatar_tts is not None:
+            try:
+                await session.avatar_tts.close()
+            except Exception:
+                logger.warning("Error closing Avatar TTS for session %s", session_id, exc_info=True)
 
         logger.info("Cleaned up session %s", session_id)
 

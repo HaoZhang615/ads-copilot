@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -20,8 +20,16 @@ class TextMessage(BaseModel):
     content: str
 
 
+class AvatarOfferMessage(BaseModel):
+    type: Literal["avatar_offer"] = "avatar_offer"
+    sdp: str
+
+
+class AvatarIceRequest(BaseModel):
+    type: Literal["avatar_ice_request"] = "avatar_ice_request"
+
 IncomingMessage = Annotated[
-    Union[AudioMessage, ControlMessage, TextMessage],
+    Union[AudioMessage, ControlMessage, TextMessage, AvatarOfferMessage, AvatarIceRequest],
     Field(discriminator="type"),
 ]
 
@@ -46,6 +54,22 @@ class TtsAudioMessage(BaseModel):
 class TtsStopMessage(BaseModel):
     type: Literal["tts_stop"] = "tts_stop"
 
+
+class AvatarAnswerMessage(BaseModel):
+    type: Literal["avatar_answer"] = "avatar_answer"
+    sdp: str
+    ice_servers: list[dict[str, Any]]
+
+
+class AvatarStateMessage(BaseModel):
+    type: Literal["avatar_state"] = "avatar_state"
+    state: Literal["idle", "connecting", "speaking", "disconnected"]
+
+
+class AvatarIceMessage(BaseModel):
+    type: Literal["avatar_ice"] = "avatar_ice"
+    ice_servers: list[dict[str, Any]]
+
 class StateMessage(BaseModel):
     type: Literal["state"] = "state"
     state: SessionState
@@ -61,6 +85,9 @@ OutgoingMessage = Union[
     AgentTextMessage,
     TtsAudioMessage,
     TtsStopMessage,
+    AvatarAnswerMessage,
+    AvatarIceMessage,
+    AvatarStateMessage,
     StateMessage,
     ErrorMessage,
 ]

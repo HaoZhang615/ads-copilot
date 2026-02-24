@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import logging
 from typing import Any
 
@@ -10,6 +11,11 @@ from app.backend.models.session_state import SessionState
 from app.backend.models.ws_messages import (
     AgentTextMessage,
     AudioMessage,
+    AvatarAnswerMessage,
+    AvatarIceMessage,
+    AvatarIceRequest,
+    AvatarOfferMessage,
+    AvatarStateMessage,
     ControlMessage,
     ErrorMessage,
     IncomingMessage,
@@ -28,6 +34,18 @@ router = APIRouter()
 
 _incoming_adapter = TypeAdapter(IncomingMessage)
 
+# Regex to strip fenced code blocks (```...```) from text before TTS.
+# This prevents the avatar / audio TTS from reading out Mermaid diagrams,
+# JSON snippets, or other code that the chat UI renders visually.
+_CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```", re.MULTILINE)
+
+
+def _strip_code_blocks(text: str) -> str:
+    """Remove fenced code blocks and collapse excess whitespace for TTS."""
+    cleaned = _CODE_BLOCK_RE.sub("", text)
+    # Collapse runs of 3+ newlines into 2 (paragraph break)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 async def _send_msg(ws: WebSocket, data: dict[str, Any]) -> None:
     try:
@@ -50,7 +68,6 @@ async def _handle_audio(ws: WebSocket, session: Session, msg: AudioMessage) -> N
 
 async def _cancel_tts(ws: WebSocket, session: Session) -> None:
     """Signal TTS cancellation and notify the frontend to stop playback.
-
     Always sends tts_stop to the frontend regardless of backend session
     state, because the backend finishes sending all TTS chunks almost
     instantly (they're pre-synthesized in memory) and transitions to IDLE
@@ -59,7 +76,73 @@ async def _cancel_tts(ws: WebSocket, session: Session) -> None:
     """
     session.tts_cancel_event.set()
     await _send_msg(ws, TtsStopMessage().model_dump())
+    # Also stop avatar speech if connected
+    if session.avatar_tts is not None and session.avatar_tts.is_connected:
+        try:
+            await session.avatar_tts.stop_speaking()
+            await session.avatar_tts.disconnect_avatar()
+            session.avatar_ready_event.clear()
+            await _send_msg(ws, AvatarStateMessage(state="disconnected").model_dump())
+        except Exception:
+            logger.warning("Failed to stop avatar on barge-in", exc_info=True)
     logger.info("Barge-in: TTS stop sent to frontend")
+
+
+async def _handle_avatar_offer(
+    ws: WebSocket, session: Session, msg: AvatarOfferMessage
+) -> asyncio.Task[None] | None:
+    """Exchange SDP with the avatar service and return the answer.
+
+    Spawns the (slow) avatar connection as a background task so the WS
+    receive loop is never blocked.  Returns the task reference for cleanup.
+    """
+    if session.avatar_tts is None:
+        await _send_msg(ws, ErrorMessage(message="Avatar not enabled").model_dump())
+        return None
+
+    async def _do_avatar_exchange() -> None:
+        await _send_msg(ws, AvatarStateMessage(state="connecting").model_dump())
+        try:
+            server_sdp, ice_servers = await session.avatar_tts.connect_avatar(msg.sdp)
+            await _send_msg(
+                ws,
+                AvatarAnswerMessage(sdp=server_sdp, ice_servers=ice_servers).model_dump(),
+            )
+            await _send_msg(ws, AvatarStateMessage(state="idle").model_dump())
+            # Signal that avatar is ready for TTS
+            session.avatar_ready_event.set()
+        except Exception:
+            logger.exception("Avatar SDP exchange failed")
+            session.avatar_ready_event.clear()
+            await _send_msg(ws, AvatarStateMessage(state="disconnected").model_dump())
+            await _send_msg(ws, ErrorMessage(message="Avatar connection failed").model_dump())
+
+    return asyncio.create_task(_do_avatar_exchange(), name="avatar-offer")
+
+
+async def _handle_avatar_ice_request(
+    ws: WebSocket, session: Session
+) -> None:
+    """Return cached ICE relay servers so the browser can create a peer connection."""
+    if session.avatar_tts is None:
+        await _send_msg(ws, ErrorMessage(message="Avatar not enabled").model_dump())
+        return
+
+    try:
+        ice_token = session.avatar_tts._ice_token or {}
+        if not ice_token:
+            await session.avatar_tts._refresh_ice_token()
+            ice_token = session.avatar_tts._ice_token or {}
+        ice_servers = [{
+            "urls": ice_token.get("Urls", []),
+            "username": ice_token.get("Username", ""),
+            "credential": ice_token.get("Password", ""),
+        }]
+        await _send_msg(ws, AvatarIceMessage(ice_servers=ice_servers).model_dump())
+        logger.info("Sent ICE servers to frontend: %s", ice_token.get("Urls", []))
+    except Exception:
+        logger.exception("Failed to get ICE servers")
+        await _send_msg(ws, ErrorMessage(message="Failed to get ICE servers").model_dump())
 
 
 async def _process_agent_response(
@@ -91,21 +174,68 @@ async def _process_agent_response(
                 await _send_msg(ws, AgentTextMessage(text=final_text, is_final=True).model_dump())
             session.conversation_history.append({"role": "assistant", "content": final_text})
 
-            # Synthesize TTS via Azure Speech SDK
-            if final_text:
+            # Strip code blocks (Mermaid, JSON, etc.) so TTS doesn't read them aloud
+            tts_text = _strip_code_blocks(final_text) if final_text else ""
+            if tts_text:
                 await _set_state(ws, session, SessionState.SPEAKING)
                 # Clear cancellation flag before starting TTS
                 session.tts_cancel_event.clear()
-                logger.info("TTS: synthesizing %d chars via Azure Speech SDK", len(final_text))
-                try:
-                    async for audio_chunk in session.speech_tts.synthesize(final_text):
-                        # Check if barge-in was requested
-                        if session.tts_cancel_event.is_set():
-                            logger.info("TTS: stopping chunk delivery due to barge-in")
-                            break
-                        await _send_msg(ws, TtsAudioMessage(data=audio_chunk).model_dump())
-                except Exception:
-                    logger.warning("TTS synthesis failed", exc_info=True)
+                # Wait for avatar WebRTC handshake to complete (if in progress)
+                # The frontend fires avatar_ice_request on state="thinking",
+                # so the avatar exchange runs in parallel with agent streaming.
+                # Give it up to 15s to finish before falling back to audio TTS.
+                avatar_connected = False
+                if session.avatar_tts is not None:
+                    avatar_connected = session.avatar_tts.is_connected
+                    if not avatar_connected:
+                        logger.info("TTS: avatar not yet connected, waiting up to 15s for avatar_ready_event")
+                        try:
+                            await asyncio.wait_for(session.avatar_ready_event.wait(), timeout=15.0)
+                            avatar_connected = session.avatar_tts.is_connected
+                            logger.info("TTS: avatar_ready_event fired, is_connected=%s", avatar_connected)
+                        except asyncio.TimeoutError:
+                            logger.info("TTS: avatar_ready_event timed out, falling back to audio TTS")
+                            avatar_connected = False
+                if avatar_connected and session.avatar_tts is not None:
+                    # Avatar path: speak through WebRTC stream (no audio chunks)
+                    logger.info(
+                        "TTS: speaking %d chars via Avatar WebRTC", len(tts_text)
+                    )
+                    try:
+                        await _send_msg(
+                            ws,
+                            AvatarStateMessage(state="speaking").model_dump(),
+                        )
+                        await session.avatar_tts.speak(tts_text)
+                        # Disconnect after speech to stop billing
+                        await session.avatar_tts.disconnect_avatar()
+                        session.avatar_ready_event.clear()
+                        await _send_msg(
+                            ws,
+                            AvatarStateMessage(state="disconnected").model_dump(),
+                        )
+                    except Exception:
+                        logger.warning("Avatar speak failed", exc_info=True)
+                        session.avatar_ready_event.clear()
+                        await _send_msg(
+                            ws,
+                            AvatarStateMessage(state="disconnected").model_dump(),
+                        )
+                else:
+                    # Regular audio path: stream TTS chunks to frontend
+                    logger.info(
+                        "TTS: synthesizing %d chars via Azure Speech SDK",
+                        len(tts_text),
+                    )
+                    try:
+                        async for audio_chunk in session.speech_tts.synthesize(tts_text):
+                            # Check if barge-in was requested
+                            if session.tts_cancel_event.is_set():
+                                logger.info("TTS: stopping chunk delivery due to barge-in")
+                                break
+                            await _send_msg(ws, TtsAudioMessage(data=audio_chunk).model_dump())
+                    except Exception:
+                        logger.warning("TTS synthesis failed", exc_info=True)
 
         except Exception:
             logger.exception("Error processing agent response")
@@ -256,6 +386,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 agent_tasks.append(task)
             elif isinstance(msg, ControlMessage):
                 await _handle_control(websocket, session, msg)
+            elif isinstance(msg, AvatarOfferMessage):
+                avatar_task = await _handle_avatar_offer(websocket, session, msg)
+                if avatar_task is not None:
+                    agent_tasks.append(avatar_task)
+            elif isinstance(msg, AvatarIceRequest):
+                await _handle_avatar_ice_request(websocket, session)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")

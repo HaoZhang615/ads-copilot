@@ -5,9 +5,11 @@ import {
   WebSocketManager,
   type IncomingMessage,
   type SessionState,
+  type AvatarState,
 } from "@/lib/ws-protocol";
 import { useAudioCapture } from "@/hooks/useAudioCapture";
 import { useAudioPlayback } from "@/hooks/useAudioPlayback";
+import { useWebRTC } from "@/hooks/useWebRTC";
 
 export interface Message {
   id: string;
@@ -29,6 +31,11 @@ interface UseVoiceSessionReturn {
   toggleListening: () => void;
   sendTextMessage: (text: string) => void;
   stopAudio: () => void;
+  avatarState: AvatarState;
+  avatarVideoRef: React.RefObject<HTMLVideoElement | null>;
+  avatarAudioRef: React.RefObject<HTMLAudioElement | null>;
+  avatarHasActivated: boolean;
+
 }
 
 const DEFAULT_WS_URL = "ws://localhost:8000/ws";
@@ -43,6 +50,17 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [isConnected, setIsConnected] = useState(false);
+  const [avatarState, setAvatarState] = useState<AvatarState>("disconnected");
+  const [avatarHasActivated, setAvatarHasActivated] = useState(false);
+
+
+  const {
+    videoRef,
+    audioRef,
+    createOffer,
+    setAnswer,
+    disconnect: disconnectWebRTC,
+  } = useWebRTC();
 
   const wsRef = useRef<WebSocketManager | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -121,6 +139,11 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       case "state": {
         setSessionState(msg.state);
         sessionStateRef.current = msg.state;
+        // When agent starts thinking, request ICE servers to prepare avatar
+        if (msg.state === "thinking") {
+          console.log("[avatar] State=thinking, requesting ICE servers");
+          wsRef.current?.send({ type: "avatar_ice_request" as const });
+        }
         break;
       }
 
@@ -132,6 +155,36 @@ export function useVoiceSession(): UseVoiceSessionReturn {
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errorMessage]);
+        break;
+      }
+
+      case "avatar_ice": {
+        // ICE servers received — create WebRTC offer with proper ICE config
+        console.log("[avatar] ICE servers received, creating offer...");
+        createOffer(msg.ice_servers)
+          .then((sdp) => {
+            console.log("[avatar] Offer created (SDP " + sdp.length + " chars), sending to backend");
+            wsRef.current?.send({ type: "avatar_offer" as const, sdp });
+          })
+          .catch((err) => {
+            console.error("[avatar] Failed to create offer:", err);
+          });
+        break;
+      }
+      case "avatar_answer": {
+        console.log("[avatar] Answer received, setting remote description");
+        setAnswer(msg.sdp);
+        break;
+      }
+
+      case "avatar_state": {
+        setAvatarState(msg.state);
+        if (msg.state === "speaking" || msg.state === "idle") {
+          setAvatarHasActivated(true);
+        }
+        if (msg.state === "disconnected") {
+          disconnectWebRTC();
+        }
         break;
       }
     }
@@ -184,10 +237,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const endSession = useCallback(() => {
     stopCapture();
     stopPlayback();
+    disconnectWebRTC();
+    setAvatarState("disconnected");
+    setAvatarHasActivated(false);
     wsRef.current?.send({ type: "control", action: "end_session" });
     setSessionState("idle");
     sessionStateRef.current = "idle";
-  }, [stopCapture, stopPlayback]);
+  }, [stopCapture, stopPlayback, disconnectWebRTC]);
 
   const onAudioChunk = useCallback((base64Data: string) => {
     wsRef.current?.send({ type: "audio", data: base64Data });
@@ -243,5 +299,10 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     toggleListening,
     sendTextMessage,
     stopAudio,
+    avatarState,
+    avatarVideoRef: videoRef,
+    avatarAudioRef: audioRef,
+    avatarHasActivated,
+
   };
 }

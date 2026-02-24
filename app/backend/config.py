@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     azure_voicelive_model: str = "gpt-realtime"
     azure_speech_region: str = "eastus2"
     azure_speech_service_id: str = ""
+    avatar_enabled: bool = False
+    avatar_character: str = "lisa"
+    avatar_style: str = "casual-sitting"
+    avatar_voice: str = "en-US-AvaMultilingualNeural"
     copilot_github_token: str = ""
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
