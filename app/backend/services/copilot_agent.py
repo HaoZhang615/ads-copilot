@@ -3,6 +3,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 from copilot import CopilotClient, CopilotSession, SessionEvent
+from copilot.types import MCPRemoteServerConfig
 
 from app.backend.config import settings
 
@@ -21,10 +22,25 @@ _SYSTEM_PROMPT = (
     "3. When generating the architecture diagram, output the Mermaid code directly "
     "in your response inside a ```mermaid code fence. Do NOT attempt to write files "
     "or run shell commands — just return the Mermaid diagram inline.\n"
-    "4. Do not use emoji in your responses."
+    "4. Do not use emoji in your responses.\n\n"
+    "FOLLOW-UP QUESTIONS & ARCHITECTURE RATIONALE:\n"
+    "When the user asks follow-up questions about architecture design choices, "
+    "trade-offs, or 'why' a particular approach was recommended, you MUST use the "
+    "Microsoft Learn MCP tools (microsoft_docs_search, microsoft_docs_fetch) to "
+    "retrieve grounded information from official Microsoft documentation. Do NOT "
+    "rely on your own training knowledge for these answers — always search Microsoft "
+    "Learn first and synthesize your response from the retrieved content. Cite the "
+    "source URL when referencing specific documentation."
 )
 
 _SKILL_DIRECTORIES = ["./databricks-ads-session"]
+_MCP_SERVERS: dict[str, MCPRemoteServerConfig] = {
+    "microsoft-learn": {
+        "type": "http",
+        "url": "https://learn.microsoft.com/api/mcp",
+        "tools": ["*"],
+    },
+}
 
 # Sentinel to signal end of streaming
 _STREAM_DONE = object()
@@ -50,6 +66,7 @@ class CopilotAgent:
             "model": "claude-sonnet-4.6",
             "skill_directories": _SKILL_DIRECTORIES,
             "system_message": {"content": _SYSTEM_PROMPT},
+            "mcp_servers": _MCP_SERVERS,
         })
 
         # Warm-up: send a hidden message to force skill loading so the
