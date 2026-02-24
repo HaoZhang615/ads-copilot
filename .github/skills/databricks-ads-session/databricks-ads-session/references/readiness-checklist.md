@@ -24,6 +24,7 @@ Cannot generate a diagram without these. If missing after 2 follow-up attempts, 
 | **Primary data sources (top 2-3)** | Determines ingestion layer design — ADF, Auto Loader, Event Hubs, JDBC | Assume ADLS + SQL DB | "What are your main data sources — databases, files, APIs, event streams?" |
 | **Target data consumers** | Determines serving layer — SQL Warehouse, ML endpoints, API, BI tool | Assume BI dashboards via Power BI | "Who uses the output? Data scientists in notebooks, analysts in Power BI, applications via API?" |
 | **Network posture** | Determines whether VNet injection, private endpoints, or public access | Assume public endpoints with IP ACLs | "Does your organization require private networking, or is public access acceptable?" |
+| **Success metrics / KPIs** | Determines whether the architecture can be measured against business goals — without KPIs, there is no definition of success | None — must have | "What does success look like? How will you measure whether this platform delivers value — SLAs, cost targets, adoption metrics?" |
 
 ## Should-Have Items
 
@@ -39,6 +40,9 @@ Generate with stated assumptions if missing after 1 follow-up attempt. Always do
 | **Compliance requirements** | Affects encryption, audit, network isolation, data residency | No specific compliance beyond standard security | "Are there regulatory frameworks you must comply with — HIPAA, SOC2, GDPR?" |
 | **BI tool and concurrency** | Sizes SQL Warehouse, determines caching strategy | Power BI, 10-20 concurrent users | "What BI tool will you use, and how many concurrent users?" |
 | **Pipeline orchestration** | Determines LakeFlow Jobs vs ADF vs external tools | LakeFlow Jobs for Databricks-native, ADF for external source ingestion | "How do you orchestrate data pipelines today — Airflow, ADF, cron jobs?" |
+| **At least one trade-off decision** | Validates that architectural alternatives were considered, not just the first option | None — must be discussed | "We covered several design choices. Which trade-off felt most significant — and why did you lean one way?" |
+| **One failure-mode walkthrough** | Validates resilience thinking — confirms the team has considered what happens when things go wrong | Assume no resilience planning yet | "What happens when your busiest pipeline fails mid-run? Walk me through detection to recovery." |
+| **Operating model defined** | Determines who owns, operates, monitors, and pays for the platform day-to-day | Central platform team | "Who will own this platform in production — a central team, domain teams, or shared responsibility?" |
 
 ## Nice-to-Have Items
 

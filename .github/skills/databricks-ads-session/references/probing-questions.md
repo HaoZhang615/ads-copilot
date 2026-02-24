@@ -260,3 +260,25 @@ Load this file when the user gives vague or incomplete answers during the ADS co
 - "We need both Delta and Iceberg" without clarity on which engine reads which. Map the access patterns first.
 - External parties require a specific format but the customer hasn't evaluated Delta Sharing (which now supports Iceberg clients).
 - User conflates table format (Delta/Iceberg) with catalog (Unity Catalog/Glue/Polaris). Separate the decisions.
+
+---
+
+## Failure Modes & Resilience
+
+**Context**: User has not discussed what happens when things go wrong — pipeline failures, data quality issues, upstream outages, or bad deployments. Resilience planning is often deferred until production incidents force it.
+
+**Progressive Questions**:
+1. "What happens today when a pipeline fails mid-run? Is there alerting, manual intervention, or does it silently fail until someone notices stale data?"
+2. "How do you handle late-arriving data — records that show up hours or days after the expected window? Do you reprocess, drop, or quarantine them?"
+3. "What is your schema drift strategy — if an upstream source adds, removes, or renames columns, does your pipeline break, auto-adapt, or quarantine the change?"
+4. "What is the blast radius of a bad deployment — if a faulty notebook or job config reaches production, how many downstream consumers are affected?"
+5. "Do you have rollback procedures for data pipelines — can you restore to a known-good state using Delta time travel, or do you need to re-run from source?"
+6. "What monitoring do you have for data quality — do you validate row counts, null rates, value distributions, or freshness SLAs after each pipeline run?"
+7. "If an upstream source system goes down for 24 hours, what is the impact on your platform? Do you have buffering, replay capability, or graceful degradation?"
+
+**Red Flags**:
+- "We have never had a pipeline failure." They have — they just did not notice. Probe for monitoring and alerting gaps.
+- No rollback plan. Without Delta time travel or checkpoint recovery, a bad pipeline run can corrupt the entire downstream lineage.
+- "We will add monitoring later." Monitoring is architecture, not a feature. Without it, you have no observability into silent failures.
+- No blast radius awareness. A single bad transformation in the Silver layer can cascade to every Gold table and dashboard.
+- Schema drift ignored. Upstream systems change schemas without notice — the pipeline must handle this or break.
