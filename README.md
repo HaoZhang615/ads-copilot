@@ -8,7 +8,7 @@ Powered by the GitHub Copilot SDK + Azure AI Services — it listens, talks back
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FHaoZhang615%2FAzure-Databricks-ADS-helper%2Fvoicelive-app%2Finfra%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FHaoZhang615%2Fads-copilot%2Fvoicelive-app%2Finfra%2Fmain.json)
 
 <!-- Replace with actual screenshot -->
 ![ADS Copilot Demo](docs/demo.png)
@@ -95,8 +95,8 @@ flowchart LR
 
 ```bash
 # Clone
-git clone https://github.com/HaoZhang615/Azure-Databricks-ADS-helper.git
-cd Azure-Databricks-ADS-helper
+git clone https://github.com/HaoZhang615/ads-copilot.git
+cd ads-copilot
 
 # Configure
 cp .env.sample .env

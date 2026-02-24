@@ -7,8 +7,8 @@ Thanks for your interest in contributing. This document covers the conventions a
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/<your-username>/Azure-Databricks-ADS-helper.git
-   cd Azure-Databricks-ADS-helper
+   git clone https://github.com/<your-username>/ads-copilot.git
+   cd ads-copilot
    ```
 3. Create a feature branch from `voicelive-app`:
    ```bash
