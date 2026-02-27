@@ -38,7 +38,7 @@ Ask about:
 
 Adapt: If user mentions migration, read [references/migration-patterns.md](references/migration-patterns.md). If user names a specific industry, read [references/industry-templates.md](references/industry-templates.md) for starter context.
 
-### Phase 2: Data Landscape
+### Phase 2: Current Landscape
 
 Ask about:
 - Data sources (databases, APIs, files, streams, SaaS platforms)
@@ -51,22 +51,7 @@ Ask about:
 
 See [references/probing-questions.md](references/probing-questions.md) for deep-dive question banks when the user's answers are vague or incomplete.
 
-### Phase 3: Workload Profiling
-
-Ask about:
-- ETL/ELT pipelines (complexity, frequency, SLAs)
-- ML/AI workloads (training, inference, MLOps maturity, Mosaic AI)
-- GenAI applications (RAG, chatbots, AI agents, document intelligence, Mosaic AI Agent Bricks)
-- BI/reporting and self-service analytics (tools, user count, concurrency, AI/BI Genie)
-- Streaming/real-time analytics requirements
-- SQL analytics workloads (ad-hoc queries, dashboards)
-- Data application hosting needs (Databricks Apps, custom UIs)
-- Notebook/interactive development needs
-- CI/CD and DevOps practices for data engineering (DABs, Azure DevOps, GitHub Actions)
-
-After this phase, offer a Technical Deep-Dive using [references/technical-deep-dives.md](references/technical-deep-dives.md).
-
-### Phase 4: Security & Networking
+### Phase 3: Security & Networking
 
 Ask about:
 - Network topology (VNet injection, private endpoints, hub-spoke)
@@ -76,7 +61,7 @@ Ask about:
 - Encryption requirements (at-rest, in-transit, customer-managed keys)
 - Secrets management approach
 
-### Phase 5: Operational Requirements
+### Phase 4: Operational Requirements
 
 Ask about:
 - HA/DR requirements and RPO/RTO targets
@@ -109,7 +94,18 @@ IF user says "just generate something" or expresses impatience:
 
 Always tell the user what you know and what you're assuming before generating.
 
-## Diagram Generation
+## Databricks Diagram Components
+
+When generating diagrams, use these Databricks-specific node shapes (extends the generic style guide from the architecture-diagramming skill):
+
+| Component Type | Shape | Mermaid Syntax | Example |
+|----------------|-------|----------------|---------|
+| **Databricks Workspace** | Rectangle | `[Name]` | `[Databricks Workspace]` |
+| **Delta Tables / ADLS** | Cylinder | `[(Name)]` | `[(ADLS Gen2)]`, `[(Delta Tables)]` |
+| **Unity Catalog** | Rectangle | `[Name]` | `[Unity Catalog]` |
+| **Security (Key Vault, Entra ID)** | Rounded | `(Name)` | `(Azure Key Vault)`, `(Microsoft Entra ID)` |
+| **Networking (VNet, ExpressRoute)** | Hexagon / Stadium | `{{Name}}` / `([Name])` | `{{Hub VNet}}`, `([ExpressRoute])` |
+| **External / On-Prem Systems** | Double-bordered | `[[Name]]` | `[[On-Prem HDFS]]` |
 
 ### Pattern Selection
 
@@ -129,74 +125,30 @@ Common patterns:
 | Multi-team data mesh | Unity Catalog + workspace per domain + Delta Sharing |
 | Hybrid batch + streaming | LakeFlow Connect + LakeFlow Jobs + Structured Streaming + Flink |
 
-### Generate the Diagram
+### Generating the Diagram
 
 Generate a Mermaid `flowchart` diagram based on the gathered requirements. Use the pattern templates in [references/databricks-patterns.md](references/databricks-patterns.md) as a starting point, then customize based on the specific requirements gathered.
 
-Follow these rules when generating Mermaid:
-- Use `flowchart LR` (left-to-right) for most architectures. Use `flowchart TB` for data mesh and ML platform patterns.
-- Group related components with `subgraph` blocks. Always name subgraphs clearly (e.g., "On-Prem Data Center", "Azure Data Platform").
-- Use arrow styles to distinguish flow types: `-->` for data flow, `-.->` for governance/security, `==>` for primary migration paths.
-- Add edge labels for clarity: `-->|batch|`, `-.->|governs|`, `-.->|secrets|`.
-- Include all components discovered during the conversation — do not omit security, monitoring, or governance components.
+Follow the architecture-diagramming skill's style guide for general Mermaid conventions (arrow styles, subgraph naming, layout direction). Apply the Databricks-specific node shapes listed above.
 
-### Render to PNG
+For rendering, Architecture Recap format, and iteration workflow, defer to the architecture-diagramming skill.
 
-After generating the Mermaid syntax:
+## Optional: Workload Profiling
 
-1. Write the Mermaid code to a `.mmd` file in the workspace:
-   ```
-   diagrams/<name>.mmd
-   ```
+These questions are **not a mandatory phase** — the customer may or may not raise workload-specific topics during the session. Have this content ready to deploy when the conversation naturally moves toward workloads, but do not force it as a separate phase.
 
-2. Convert to PNG using mermaid-cli:
-   ```bash
-    npx -y @mermaid-js/mermaid-cli -i diagrams/<name>.mmd -o diagrams/<name>.png --scale 3 --backgroundColor white --width 1600
-   ```
+If the customer discusses workloads, ask about:
+- ETL/ELT pipelines (complexity, frequency, SLAs)
+- ML/AI workloads (training, inference, MLOps maturity, Mosaic AI)
+- GenAI applications (RAG, chatbots, AI agents, document intelligence, Mosaic AI Agent Bricks)
+- BI/reporting and self-service analytics (tools, user count, concurrency, AI/BI Genie)
+- Streaming/real-time analytics requirements
+- SQL analytics workloads (ad-hoc queries, dashboards)
+- Data application hosting needs (Databricks Apps, custom UIs)
+- Notebook/interactive development needs
+- CI/CD and DevOps practices for data engineering (DABs, Azure DevOps, GitHub Actions)
 
-3. Tell the user where the PNG file is:
-   > "Architecture diagram saved to `diagrams/<name>.png`. Open the file to view."
-
-If `npx` is unavailable, write the Mermaid to a `.md` file wrapped in a mermaid code fence and instruct the user to open it with VS Code's Markdown preview (Ctrl+Shift+V).
-
-### Architecture Recap
-
-After presenting the diagram, deliver a structured component-by-component explanation. This step is mandatory — it turns the diagram into an actionable architecture decision.
-
-Present a table for every component in the diagram:
-
-| Component | Role in This Architecture | Why This Was Chosen |
-|-----------|---------------------------|---------------------|
-| _e.g. LakeFlow Connect_ | _Ingests data from 12 source systems with CDC_ | _Customer needs native CDC; eliminates ADF pipeline maintenance_ |
-| _e.g. Unity Catalog_ | _Centralized governance for all data assets_ | _Multi-team access with column-level masking required for PII_ |
-| ... | ... | ... |
-
-Rules:
-- **Every node in the diagram must appear in the recap.** Do not skip security, networking, or governance components.
-- **The "Why" column must reference specific requirements from the conversation.** Do not use generic justifications like "best practice." Tie each choice to something the user said.
-- **Group components by layer**: Ingestion → Storage & Processing → Serving & Consumption → AI/ML (if applicable) → Governance & Security → Operations & DevOps.
-- **Call out alternatives considered but not chosen** (e.g., "LakeFlow Connect over ADF because..."). Use [references/trade-offs-and-failure-modes.md](references/trade-offs-and-failure-modes.md) for domain-specific trade-off rationale.
-- **Flag decision points** where the user should make a final call (e.g., LLM provider choice, serverless vs. provisioned compute).
-- **Note sensible defaults** included without explicit request (e.g., Key Vault for secrets management).
-
-See [references/conversation-framework.md](references/conversation-framework.md) Phase 6 for the full recap format and examples.
-
-### Mermaid Style Guide
-
-Use consistent node shapes for Azure component types:
-- **Compute/Processing**: Rectangles `[Azure Databricks]`
-- **Storage**: Cylinders `[(ADLS Gen2)]` or databases `[( )]`
-- **Security/Identity**: Rounded `(Azure Key Vault)` or `(Microsoft Entra ID)`
-- **Networking**: Hexagons `{{Hub VNet}}` or stadiums `([ExpressRoute])`
-- **External Systems**: Rectangles with double borders `[[On-Prem HDFS]]`
-
-## Iteration
-
-After presenting the diagram:
-1. Ask the user to review — what's missing, wrong, or needs emphasis?
-2. Adjust the Mermaid code based on feedback
-3. Re-render the PNG with changes
-4. Repeat until the user is satisfied
+If a workload area warrants deeper exploration, offer a Technical Deep-Dive using [references/technical-deep-dives.md](references/technical-deep-dives.md).
 
 ## Databricks Expertise
 
@@ -213,7 +165,7 @@ You know Databricks inside-out — the tradeoffs between serverless and provisio
 | [references/migration-patterns.md](references/migration-patterns.md) | User is migrating from an existing platform |
 | [references/probing-questions.md](references/probing-questions.md) | User gives vague answers, need to dig deeper |
 | [references/trade-offs-and-failure-modes.md](references/trade-offs-and-failure-modes.md) | Trade-off analysis or failure mode walkthrough needed |
-| [references/technical-deep-dives.md](references/technical-deep-dives.md) | User accepts a technical deep-dive (spike) after Phase 3 |
+| [references/technical-deep-dives.md](references/technical-deep-dives.md) | User accepts a technical deep-dive (spike) on a workload topic |
 
 ## Scripts
 

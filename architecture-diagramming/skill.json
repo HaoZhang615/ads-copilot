@@ -1,0 +1,13 @@
+{
+  "name": "architecture-diagramming",
+  "description": "Architecture diagramming skill for ADS sessions. Provides Mermaid conventions, style guide, Current/Future State templates, and generic architecture patterns.",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "name": "diagramming",
+      "description": "Diagram generation conventions and patterns for ADS sessions",
+      "path": "SKILL.md"
+    }
+  ],
+  "tools": []
+}

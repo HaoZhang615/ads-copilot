@@ -5,12 +5,12 @@ Databricks-specific signal detection, adaptive behaviors, phase execution detail
 ## Table of Contents
 - [Signal Detection](#signal-detection)
 - [Phase 1: Context Discovery](#phase-1-context-discovery)
-- [Phase 2: Data Landscape](#phase-2-data-landscape)
-- [Phase 3: Workload Profiling](#phase-3-workload-profiling)
-- [Phase 4: Security and Networking](#phase-4-security-and-networking)
-- [Phase 5: Operational Requirements](#phase-5-operational-requirements)
-- [Phase 6: Diagram Generation](#phase-6-diagram-generation)
-- [Phase 7: Iteration](#phase-7-iteration)
+- [Phase 2: Current Landscape](#phase-2-current-landscape)
+- [Phase 3: Security and Networking](#phase-3-security-and-networking)
+- [Phase 4: Operational Requirements](#phase-4-operational-requirements)
+- [Phase 5: Future State Diagram Generation](#phase-5-future-state-diagram-generation)
+- [Phase 6: Iteration](#phase-6-iteration)
+- [Optional: Workload Profiling](#optional-workload-profiling)
 
 ## Signal Detection
 
@@ -19,20 +19,20 @@ Detect these keywords early in the conversation and adapt the interview path acc
 | User Signal | Adaptive Behavior |
 |-------------|-------------------|
 | "migration", "Hadoop", "Teradata", "on-prem" | Emphasize source system discovery in Phase 2. Load `migration-patterns.md`. |
-| "Kafka", "streaming", "real-time", "events" | Prioritize latency requirements in Phase 3. Steer toward streaming patterns. |
-| "machine learning", "AI", "models", "predictions" | Deep-dive ML maturity in Phase 3. Probe MLOps, feature engineering, Mosaic AI. |
+| "Kafka", "streaming", "real-time", "events" | Prioritize latency requirements. Probe streaming workloads when relevant (see Optional: Workload Profiling). Steer toward streaming patterns. |
+| "machine learning", "AI", "models", "predictions" | Deep-dive ML maturity when relevant (see Optional: Workload Profiling). Probe MLOps, feature engineering, Mosaic AI. |
 | "GenAI", "LLM", "RAG", "chatbot", "agent", "copilot", "GPT", "MCP" | Steer toward Pattern 9 (GenAI). Probe knowledge sources, LLM choice, agent framework, MCP connectivity, agent complexity. |
-| "compliance", "HIPAA", "SOC2", "GDPR", "FedRAMP" | Expand Phase 4 to 3 turns. Probe encryption, audit, data residency. |
-| "dashboard", "Power BI", "Tableau", "reports" | Focus Phase 3 on BI concurrency, data freshness, semantic layer. |
+| "compliance", "HIPAA", "SOC2", "GDPR", "FedRAMP" | Expand Phase 3 (Security & Networking) to 3 turns. Probe encryption, audit, data residency. |
+| "dashboard", "Power BI", "Tableau", "reports" | Probe BI concurrency, data freshness, semantic layer when relevant (see Optional: Workload Profiling). |
 | "IoT", "sensors", "telemetry", "devices" | Load `industry-templates.md` (Manufacturing/IoT). Probe device count, message frequency. |
 | Industry name (retail, healthcare, finance, etc.) | Load `industry-templates.md` for the relevant vertical. |
-| "cost", "budget", "cheap", "expensive" | Note cost sensitivity. Expand Phase 5 cost discussion. |
-| "dbt", "Airflow", "Spark" | Note existing tooling. Probe integration needs in Phase 3. |
+| "cost", "budget", "cheap", "expensive" | Note cost sensitivity. Expand Phase 4 cost discussion. |
+| "dbt", "Airflow", "Spark" | Note existing tooling. Probe integration needs when relevant. |
 | "LakeFlow", "DLT", "Delta Live Tables" | Note familiarity with Databricks-native ingestion. Probe LakeFlow Connect vs ADF. |
 | "Databricks Apps", "Streamlit", "Gradio" | Note application-layer requirements. Probe hosting, authentication needs. |
-| "FinOps", "cost optimization", "chargeback", "budget" | Expand Phase 5 cost discussion. Probe serverless vs provisioned, tagging strategy, cost attribution model. |
+| "FinOps", "cost optimization", "chargeback", "budget" | Expand Phase 4 cost discussion. Probe serverless vs provisioned, tagging strategy, cost attribution model. |
 | "Iceberg", "Delta", "table format", "multi-engine", "UniForm" | Probe table format requirements. Load cross-cutting concern from `databricks-patterns.md`. |
-| "MCP", "agent framework", "LangGraph", "CrewAI" | Probe agent framework selection in Phase 3. Address MCP connectivity for agent-to-tool integration. |
+| "MCP", "agent framework", "LangGraph", "CrewAI" | Probe agent framework selection when relevant. Address MCP connectivity for agent-to-tool integration. |
 | "Fabric", "OneLake", "Power BI Premium" | Note Microsoft Fabric as alternative or complement. Load `migration-patterns.md` Fabric section. Probe coexistence vs migration. |
 
 ---
@@ -64,22 +64,22 @@ Detect these keywords early in the conversation and adapt the interview path acc
 - If user seems non-technical, simplify language and focus on business outcomes.
 
 ### Transition
-Bridge naturally into data landscape — for example: "That gives me a solid picture of what's driving this. The next thing I need to wrap my head around is your data — where it lives, how much of it there is, and how fast it moves."
+Bridge naturally into current landscape — for example: "That gives me a solid picture of what's driving this. The next thing I need to wrap my head around is your current environment — what systems you have, where your data lives, how much of it there is, and how fast it moves."
 
 ### Anti-patterns
 - Do NOT jump to solution design. This phase is pure discovery.
 - Do NOT assume cloud maturity — ask about existing Azure experience.
-- Do NOT open the conversation with questions. Start with a brief orientation ("Here's how I typically run these sessions — we'll start with the business context, work through data and workloads, then I'll put together an architecture.") then ask your first question.
+- Do NOT open the conversation with questions. Start with a brief orientation ("Here's how I typically run these sessions — we'll start with the business context, work through your current environment, then I'll put together an architecture.") then ask your first question.
 
 ---
 
-## Phase 2: Data Landscape
+## Phase 2: Current Landscape
 
-**Purpose**: Map the complete data ecosystem — sources, volumes, velocity, and governance needs.
+**Purpose**: Map the complete current environment — data sources, volumes, velocity, governance needs, existing systems, and pain points.
 
 **Entry condition**: Business problem and project type (greenfield/migration) are understood.
 
-**Exit condition**: You can enumerate the primary data sources, estimate volumes, and know whether real-time processing is needed.
+**Exit condition**: You can enumerate the primary data sources, estimate volumes, know whether real-time processing is needed, and understand the current technology stack and pain points. After this phase, generate the **Current State diagram** and get user agreement before proceeding.
 
 ### Core Questions
 
@@ -101,66 +101,25 @@ Bridge naturally into data landscape — for example: "That gives me a solid pic
 - GenAI signal detected: "What knowledge sources would AI agents need access to? Documents, wikis, databases?" → Map to Vector Search indexing needs.
 - Large volume signal (>1TB/day): Note Liquid Clustering requirements, ADLS storage tier strategy, compute sizing implications.
 
+### Current State Diagram Checkpoint
+After completing this phase, generate a **Current State** architecture diagram in Mermaid that captures the existing landscape as discussed. Present it to the user and explicitly ask them to confirm or correct it before proceeding. Both parties must agree on the current state before designing the future state. This is a mandatory checkpoint — do not skip it.
+
 ### Transition
-Bridge into workload profiling by connecting the data picture to what they'll do with it — for example: "OK, so I've got a good handle on your data landscape. With that volume and those source types, there are a few ways to architect this — but it really depends on what your team needs to do with the data day-to-day."
+Bridge into security by connecting the current landscape to security implications — for example: "Good — I have a clear picture of your current environment. Before I start thinking about the target architecture, I need to understand your security posture — that'll shape the deployment quite a bit."
 
 ### Anti-patterns
 - Do NOT accept "we have a lot of data" as a sufficient answer. Probe gently: "Help me calibrate — are we talking hundreds of gigs or multiple terabytes per day?"
 - Do NOT skip governance — Unity Catalog scoping depends on it.
 - Do NOT assume all data is structured. Ask about semi-structured and unstructured data.
+- Do NOT skip the Current State diagram checkpoint. Both parties must agree on the baseline.
 
 ---
 
-## Phase 3: Workload Profiling
-
-**Purpose**: Identify what the platform needs to do — ETL, ML, BI, streaming, interactive analytics.
-
-**Entry condition**: Data sources and volumes are understood.
-
-**Exit condition**: You can list the primary workloads, their SLAs, user counts, and tool requirements. You've offered a technical deep-dive.
-
-### Core Questions
-
-1. "What are the primary things you need to do with this data? ETL pipelines, machine learning, dashboards, ad-hoc queries, GenAI applications?"
-2. "How many data engineers, data scientists, and analysts will use the platform?"
-   - Follow-up: "Will they work in notebooks, SQL, or both?"
-3. "What are your pipeline SLAs? For example, must data be ready for dashboards by 7 AM?"
-4. "What BI tools do you use or plan to use? Power BI, Tableau, Looker, custom apps?"
-   - Follow-up: "How many concurrent dashboard users?"
-5. "Do you have ML/AI workloads? If so, what's your MLOps maturity — ad-hoc notebooks, or structured training/deployment pipelines?"
-6. "Are you building or planning any GenAI applications — chatbots, document search, AI agents, copilots?"
-   - Follow-up: "What LLM provider are you considering — Azure OpenAI, open-source models, or both?"
-7. "What CI/CD and DevOps practices does your data team use today?"
-8. "Do you need to host data applications or internal tools on the platform — dashboards, web apps, APIs?"
-
-### Databricks-Specific Adaptive Behavior
-- ML signal detected: "Do you need a Feature Store? Online serving for real-time predictions? GPU clusters? Mosaic AI capabilities?"
-- GenAI signal detected: "How many knowledge sources need to be indexed? What's the expected query volume? Do you need multi-turn agent conversations or single-shot Q&A?"
-- BI-heavy signal: "Do you need a semantic layer (e.g., dbt metrics)? What's the query concurrency target?" → Size SQL Warehouse accordingly.
-- Streaming signal: "What end-to-end latency target — seconds, minutes? Do you need exactly-once processing?" → Structured Streaming vs Flink decision.
-- App-building signal: "What framework — Streamlit, Gradio, Dash, React? How many concurrent app users?" → Databricks Apps vs custom hosting.
-
-### Technical Deep-Dive Offer
-After gathering workload information, offer a spike: "Before we move to security, I'd like to offer a quick deep-dive into one area. Based on what you've told me, [Data Engineering / Data Warehousing / AI-ML] seems like where the most architectural complexity lives. Would you like to spend 10-15 minutes going deeper there, or should we move on?"
-
-Use [references/technical-deep-dives.md](references/technical-deep-dives.md) for the spike playbooks.
-
-### Transition
-Bridge into security by connecting a workload decision to security implications — for example: "That's helpful — I'm forming a clear picture of the platform. One thing that'll shape the deployment quite a bit is your security posture. Let me check a few things there."
-
-### Anti-patterns
-- Do NOT assume notebook-only workflows. Many enterprises need production job scheduling.
-- Do NOT skip CI/CD questions — it affects workspace and repo design.
-- Do NOT conflate "real-time BI" with "streaming ETL" — probe to distinguish.
-- Do NOT assume "AI" means GenAI. Clarify: classical ML (predictions, classification) vs generative AI (RAG, agents, LLMs).
-
----
-
-## Phase 4: Security and Networking
+## Phase 3: Security and Networking
 
 **Purpose**: Establish the security boundary, compliance requirements, and networking topology.
 
-**Entry condition**: Workloads are profiled.
+**Entry condition**: Current landscape is mapped and Current State diagram is agreed upon.
 
 **Exit condition**: You know the network posture (public/private), identity approach, and compliance requirements.
 
@@ -190,7 +149,7 @@ Bridge into operations with a forward-looking comment — for example: "Good —
 
 ---
 
-## Phase 5: Operational Requirements
+## Phase 4: Operational Requirements
 
 **Purpose**: Define non-functional requirements that affect architecture decisions. Establish the operating model and probe failure modes.
 
@@ -229,13 +188,13 @@ Signal that you're ready to synthesize — for example: "I think I have what I n
 
 ---
 
-## Phase 6: Diagram Generation
+## Phase 5: Future State Diagram Generation
 
-**Purpose**: Synthesize all gathered information into a concrete architecture diagram.
+**Purpose**: Synthesize all gathered information into a concrete future state architecture diagram.
 
 **Entry condition**: Readiness gate passed (see readiness-checklist.md).
 
-**Exit condition**: A diagram has been generated with a full architecture recap and self-critique.
+**Exit condition**: A Future State diagram has been generated with a full architecture recap and self-critique.
 
 ### Steps
 
@@ -266,7 +225,7 @@ Present the recap as a table with three columns:
 #### Rules
 
 1. **Every node in the diagram must appear in the recap.** Do not skip security, networking, or governance components.
-2. **The "Why" column must reference specific requirements gathered during Phases 1-5.** Generic reasons like "best practice" are not sufficient — tie it back to something the user said.
+2. **The "Why" column must reference specific requirements gathered during Phases 1-4.** Generic reasons like "best practice" are not sufficient — tie it back to something the user said.
 3. **Group components by layer** for readability:
    - **Ingestion** — how data enters the platform
    - **Storage & Processing** — where data lives and how it's transformed
@@ -295,13 +254,13 @@ After the recap, transition to iteration:
 
 ---
 
-## Phase 7: Iteration
+## Phase 6: Iteration
 
-**Purpose**: Refine the architecture based on user feedback.
+**Purpose**: Refine both the Current State and Future State architecture diagrams based on user feedback.
 
-**Entry condition**: Initial diagram has been presented.
+**Entry condition**: Future State diagram has been presented.
 
-**Exit condition**: User is satisfied with the architecture.
+**Exit condition**: User is satisfied with both diagrams.
 
 ### Steps
 
@@ -316,3 +275,48 @@ After the recap, transition to iteration:
 - Do NOT be defensive about architectural choices. If the user wants a different approach, accommodate it. You're the architect, not the decision-maker.
 - Do NOT end the session without asking if there's anything else to adjust.
 - Do NOT lose the consultant voice during iteration. Stay opinionated: "You could do that, but here's what I'd recommend instead..."
+
+---
+
+## Optional: Workload Profiling
+
+These questions are **not a mandatory phase** — the customer may or may not raise workload-specific topics during the session. Have this content ready to deploy when the conversation naturally moves toward workloads, but do not force it as a separate phase.
+
+### When to Use
+
+Deploy these questions when:
+- The customer mentions specific workload types (ETL, ML, BI, streaming, GenAI)
+- You need to size compute resources or select Databricks components
+- The conversation naturally moves toward "what will you do with this data?"
+
+### Core Questions
+
+1. "What are the primary things you need to do with this data? ETL pipelines, machine learning, dashboards, ad-hoc queries, GenAI applications?"
+2. "How many data engineers, data scientists, and analysts will use the platform?"
+   - Follow-up: "Will they work in notebooks, SQL, or both?"
+3. "What are your pipeline SLAs? For example, must data be ready for dashboards by 7 AM?"
+4. "What BI tools do you use or plan to use? Power BI, Tableau, Looker, custom apps?"
+   - Follow-up: "How many concurrent dashboard users?"
+5. "Do you have ML/AI workloads? If so, what's your MLOps maturity — ad-hoc notebooks, or structured training/deployment pipelines?"
+6. "Are you building or planning any GenAI applications — chatbots, document search, AI agents, copilots?"
+   - Follow-up: "What LLM provider are you considering — Azure OpenAI, open-source models, or both?"
+7. "What CI/CD and DevOps practices does your data team use today?"
+8. "Do you need to host data applications or internal tools on the platform — dashboards, web apps, APIs?"
+
+### Databricks-Specific Adaptive Behavior
+- ML signal detected: "Do you need a Feature Store? Online serving for real-time predictions? GPU clusters? Mosaic AI capabilities?"
+- GenAI signal detected: "How many knowledge sources need to be indexed? What's the expected query volume? Do you need multi-turn agent conversations or single-shot Q&A?"
+- BI-heavy signal: "Do you need a semantic layer (e.g., dbt metrics)? What's the query concurrency target?" → Size SQL Warehouse accordingly.
+- Streaming signal: "What end-to-end latency target — seconds, minutes? Do you need exactly-once processing?" → Structured Streaming vs Flink decision.
+- App-building signal: "What framework — Streamlit, Gradio, Dash, React? How many concurrent app users?" → Databricks Apps vs custom hosting.
+
+### Technical Deep-Dive Offer
+If a workload area warrants deeper exploration, offer a spike: "I'd like to offer a quick deep-dive into one area. Based on what you've told me, [Data Engineering / Data Warehousing / AI-ML] seems like where the most architectural complexity lives. Would you like to spend 10-15 minutes going deeper there, or should we move on?"
+
+Use [references/technical-deep-dives.md](references/technical-deep-dives.md) for the spike playbooks.
+
+### Anti-patterns
+- Do NOT assume notebook-only workflows. Many enterprises need production job scheduling.
+- Do NOT skip CI/CD questions — it affects workspace and repo design.
+- Do NOT conflate "real-time BI" with "streaming ETL" — probe to distinguish.
+- Do NOT assume "AI" means GenAI. Clarify: classical ML (predictions, classification) vs generative AI (RAG, agents, LLMs).
