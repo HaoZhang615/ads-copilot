@@ -336,6 +336,78 @@ class CopilotAgent:
             "content": "".join(full_response),
         })
 
+    async def generate_summary(self, conversation_history: list[dict[str, str]]) -> AsyncGenerator[str, None]:
+        """Generate a structured session summary document from the conversation history.
+
+        Sends the full conversation to the Copilot agent with a summarization
+        prompt and streams the resulting Markdown document back.
+        """
+        # Build a transcript block for the prompt
+        transcript_lines: list[str] = []
+        for entry in conversation_history:
+            role = entry.get("role", "unknown").upper()
+            content = entry.get("content", "")
+            transcript_lines.append(f"{role}: {content}")
+        transcript = "\n\n".join(transcript_lines)
+
+        summary_prompt = (
+            "You are now generating a session summary document. Below is the full "
+            "transcript of the Architecture Design Session you just conducted. "
+            "Produce a structured Markdown document that both parties can take "
+            "away as documentation.\n\n"
+            "IMPORTANT RULES:\n"
+            "1. Extract and synthesize — do NOT just copy-paste the conversation.\n"
+            "2. Be concise and actionable.\n"
+            "3. Preserve all Mermaid diagrams exactly as they appeared.\n"
+            "4. If certain sections have no relevant content from the session, "
+            "write 'Not discussed in this session.' rather than inventing content.\n\n"
+            "OUTPUT FORMAT (use exactly these headings):\n\n"
+            "# Architecture Design Session Summary\n\n"
+            "**Date:** [today's date]\n"
+            "**Participants:** AI Solutions Architect, Customer\n\n"
+            "## 1. Executive Summary\n"
+            "2-3 sentence overview of what was discussed and the outcome.\n\n"
+            "## 2. Business Context & Use Case\n"
+            "- Business problem being solved\n"
+            "- Key stakeholders and drivers mentioned\n"
+            "- Success criteria / KPIs discussed\n\n"
+            "## 3. Requirements\n"
+            "### Functional Requirements\n"
+            "- Data sources, volumes, velocity\n"
+            "- Workloads identified (ETL, ML, BI, streaming, etc.)\n"
+            "### Non-Functional Requirements\n"
+            "- Latency, availability, security posture\n"
+            "- Compliance, DR, environments\n\n"
+            "## 4. Architecture Decisions\n"
+            "Summarize key decisions made during the session:\n"
+            "| Decision | Choice | Rationale | Alternatives Considered |\n"
+            "|----------|--------|-----------|------------------------|\n"
+            "(fill from conversation)\n\n"
+            "## 5. Recommended Architecture\n"
+            "### Architecture Pattern\n"
+            "Name and brief description of the selected pattern.\n"
+            "### Architecture Diagram\n"
+            "Include the final Mermaid diagram from the session in a "
+            "```mermaid code fence. If multiple diagrams were produced, "
+            "include the most complete/final version.\n"
+            "### Component Breakdown\n"
+            "Table of components with 'Why This Was Chosen' column.\n\n"
+            "## 6. Known Limitations & Risks\n"
+            "- Assumptions made during the session\n"
+            "- Areas needing further validation\n"
+            "- Scaling or operational risks identified\n\n"
+            "## 7. Next Steps & Action Items\n"
+            "- Immediate follow-ups\n"
+            "- POC or spike recommendations\n"
+            "- Open questions to resolve\n\n"
+            "---\n\n"
+            "FULL SESSION TRANSCRIPT:\n\n"
+            f"{transcript}"
+        )
+
+        # Reuse the same streaming mechanism as send_message
+        async for chunk in self.send_message(summary_prompt):
+            yield chunk
     @property
     def conversation_history(self) -> list[dict[str, str]]:
         return self._conversation_history

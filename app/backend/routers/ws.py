@@ -19,6 +19,7 @@ from app.backend.models.ws_messages import (
     ControlMessage,
     ErrorMessage,
     IncomingMessage,
+    SessionSummaryChunkMessage,
     StateMessage,
     TextMessage,
     TranscriptMessage,
@@ -321,13 +322,65 @@ async def _handle_text(
     )
 
 
-async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) -> None:
+async def _generate_session_summary(
+    ws: WebSocket,
+    session: Session,
+    agent_lock: asyncio.Lock,
+) -> None:
+    """Generate and stream a session summary document to the frontend.
+
+    Called before session cleanup when the user ends the session.
+    Streams the summary as `session_summary_chunk` messages, then
+    sends a final chunk with `is_final=True`.
+    """
+    async with agent_lock:
+        await _set_state(ws, session, SessionState.THINKING)
+        full_summary: list[str] = []
+        try:
+            async for chunk in session.copilot.generate_summary(
+                session.conversation_history
+            ):
+                full_summary.append(chunk)
+                await _send_msg(
+                    ws,
+                    SessionSummaryChunkMessage(text=chunk, is_final=False).model_dump(),
+                )
+
+            # Send the final consolidated summary
+            final_text = "".join(full_summary)
+            await _send_msg(
+                ws,
+                SessionSummaryChunkMessage(text=final_text, is_final=True).model_dump(),
+            )
+        except Exception:
+            logger.exception("Error generating session summary")
+            await _send_msg(
+                ws,
+                ErrorMessage(message="Failed to generate session summary").model_dump(),
+            )
+        finally:
+            # Now clean up the session
+            await session_manager.cleanup_session(session.session_id)
+            await _set_state(ws, session, SessionState.IDLE)
+
+
+async def _handle_control(
+    ws: WebSocket,
+    session: Session,
+    msg: ControlMessage,
+    agent_lock: asyncio.Lock,
+) -> asyncio.Task[None] | None:
     if msg.action == "start_session":
         await _send_msg(ws, StateMessage(state=session.state).model_dump())
 
     elif msg.action == "end_session":
-        await session_manager.cleanup_session(session.session_id)
-        await _send_msg(ws, StateMessage(state=SessionState.IDLE).model_dump())
+        # Cancel any ongoing TTS before generating summary
+        await _cancel_tts(ws, session)
+        # Generate summary in background, then clean up
+        return asyncio.create_task(
+            _generate_session_summary(ws, session, agent_lock),
+            name="session-summary",
+        )
 
     elif msg.action == "start_listening":
         # User started mic capture — cancel any ongoing TTS (barge-in)
@@ -351,6 +404,7 @@ async def _handle_control(ws: WebSocket, session: Session, msg: ControlMessage) 
         # User explicitly pressed stop audio button
         await _cancel_tts(ws, session)
 
+    return None
 
 async def _voicelive_listener(
     ws: WebSocket,
@@ -451,7 +505,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 task = await _handle_text(websocket, session, msg, agent_lock)
                 agent_tasks.append(task)
             elif isinstance(msg, ControlMessage):
-                await _handle_control(websocket, session, msg)
+                control_task = await _handle_control(websocket, session, msg, agent_lock)
+                if control_task is not None:
+                    agent_tasks.append(control_task)
             elif isinstance(msg, AvatarOfferMessage):
                 avatar_task = await _handle_avatar_offer(websocket, session, msg)
                 if avatar_task is not None:

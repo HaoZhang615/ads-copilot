@@ -37,6 +37,9 @@ interface UseVoiceSessionReturn {
   avatarHasActivated: boolean;
   liteMode: boolean;
   setLiteMode: (enabled: boolean) => void;
+  sessionSummary: string | null;
+  isGeneratingSummary: boolean;
+  dismissSummary: () => void;
 }
 
 const DEFAULT_WS_URL = "ws://localhost:8000/ws";
@@ -71,6 +74,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [avatarState, setAvatarState] = useState<AvatarState>("disconnected");
   const [avatarHasActivated, setAvatarHasActivated] = useState(false);
   const [liteMode, setLiteModeState] = useState<boolean>(readLiteModeFromStorage);
+  const [sessionSummary, setSessionSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   // Ref mirror so the message handler closure always reads the latest value.
   const liteModeRef = useRef(liteMode);
@@ -256,6 +261,18 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         }
         break;
       }
+
+      case "session_summary_chunk": {
+        if (msg.is_final) {
+          // Final summary — replace any streaming content with the complete text
+          setSessionSummary(msg.text);
+          setIsGeneratingSummary(false);
+        } else {
+          // Streaming chunk — append to summary
+          setSessionSummary((prev) => (prev || "") + msg.text);
+        }
+        break;
+    }
     }
   };
 
@@ -374,9 +391,11 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     disconnectWebRTC();
     setAvatarState("disconnected");
     setAvatarHasActivated(false);
+    setIsGeneratingSummary(true);
+    setSessionSummary(null);
     wsRef.current?.send({ type: "control", action: "end_session" });
-    setSessionState("idle");
-    sessionStateRef.current = "idle";
+    // Don't set state to idle yet — wait for summary to complete.
+    // The backend will send state updates as it generates the summary.
   }, [stopCapture, stopPlayback, disconnectWebRTC]);
 
   const onAudioChunk = useCallback((base64Data: string) => {
@@ -421,6 +440,11 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     wsRef.current?.send({ type: "control", action: "tts_stop" });
   }, [stopPlayback]);
 
+  const dismissSummary = useCallback(() => {
+    setSessionSummary(null);
+    setIsGeneratingSummary(false);
+  }, []);
+
   return {
     messages,
     sessionState,
@@ -439,5 +463,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     avatarHasActivated,
     liteMode,
     setLiteMode,
+    sessionSummary,
+    isGeneratingSummary,
+    dismissSummary,
   };
 }

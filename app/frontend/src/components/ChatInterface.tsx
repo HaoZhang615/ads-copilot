@@ -6,6 +6,7 @@ import { MessageBubble } from "@/components/MessageBubble";
 import { VoiceButton } from "@/components/VoiceButton";
 import { TextInput } from "@/components/TextInput";
 import { AvatarPanel } from "@/components/AvatarPanel";
+import { SessionSummaryModal } from "@/components/SessionSummaryModal";
 import type { SessionState } from "@/lib/ws-protocol";
 
 const STATE_LABELS: Record<SessionState, string> = {
@@ -158,6 +159,9 @@ export function ChatInterface() {
     avatarHasActivated,
     liteMode,
     setLiteMode,
+    sessionSummary,
+    isGeneratingSummary,
+    dismissSummary,
   } = useVoiceSession();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -219,15 +223,6 @@ export function ChatInterface() {
           </div>
           <div className="h-4 w-px bg-[var(--border)]" />
           <LiteModeToggle enabled={liteMode} onChange={setLiteMode} />
-          {sessionState !== "idle" && (
-            <button
-              type="button"
-              onClick={endSession}
-              className="text-xs px-3 py-1.5 rounded-lg bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
-            >
-              End Session
-            </button>
-          )}
         </div>
       </header>
 
@@ -330,10 +325,44 @@ export function ChatInterface() {
                   />
                 </>
               )}
+              <button
+                type="button"
+                onClick={endSession}
+                disabled={isGeneratingSummary}
+                aria-label="End session"
+                title={isGeneratingSummary ? "Summarizing…" : "End Session"}
+                className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-200 bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--danger)] focus:ring-offset-2 focus:ring-offset-[var(--background)] ${isGeneratingSummary ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {isGeneratingSummary ? (
+                  <span className="inline-block w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-5 h-5"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>
       </div>
+      {/* Session summary modal */}
+      {(sessionSummary !== null || isGeneratingSummary) && (
+        <SessionSummaryModal
+          summary={sessionSummary}
+          isGenerating={isGeneratingSummary}
+          onDismiss={dismissSummary}
+        />
+      )}
     </div>
   );
 }

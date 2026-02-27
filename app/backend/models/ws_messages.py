@@ -80,6 +80,13 @@ class ErrorMessage(BaseModel):
     message: str
 
 
+class SessionSummaryChunkMessage(BaseModel):
+    """Streaming chunk of the session summary document."""
+    type: Literal["session_summary_chunk"] = "session_summary_chunk"
+    text: str
+    is_final: bool
+
+
 OutgoingMessage = Union[
     TranscriptMessage,
     AgentTextMessage,
@@ -90,4 +97,5 @@ OutgoingMessage = Union[
     AvatarStateMessage,
     StateMessage,
     ErrorMessage,
+    SessionSummaryChunkMessage,
 ]

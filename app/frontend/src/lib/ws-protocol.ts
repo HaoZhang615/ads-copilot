@@ -81,6 +81,13 @@ export type IncomingAvatarStateMessage = {
   state: AvatarState;
 };
 
+export type IncomingSessionSummaryChunkMessage = {
+  type: "session_summary_chunk";
+  text: string;
+  is_final: boolean;
+};
+
+
 export type AvatarState = "idle" | "connecting" | "speaking" | "disconnected";
 
 export type IncomingMessage =
@@ -92,7 +99,8 @@ export type IncomingMessage =
   | IncomingErrorMessage
   | IncomingAvatarAnswerMessage
   | IncomingAvatarIceMessage
-  | IncomingAvatarStateMessage;
+  | IncomingAvatarStateMessage
+  | IncomingSessionSummaryChunkMessage;
 
 type MessageHandler = (msg: IncomingMessage) => void;
 
