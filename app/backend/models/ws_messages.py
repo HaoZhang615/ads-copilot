@@ -28,8 +28,14 @@ class AvatarOfferMessage(BaseModel):
 class AvatarIceRequest(BaseModel):
     type: Literal["avatar_ice_request"] = "avatar_ice_request"
 
+
+class RestoreHistoryMessage(BaseModel):
+    """Sent by the frontend after a mode toggle reconnect to restore conversation context."""
+    type: Literal["restore_history"] = "restore_history"
+    messages: list[dict[str, str]]
+
 IncomingMessage = Annotated[
-    Union[AudioMessage, ControlMessage, TextMessage, AvatarOfferMessage, AvatarIceRequest],
+    Union[AudioMessage, ControlMessage, TextMessage, AvatarOfferMessage, AvatarIceRequest, RestoreHistoryMessage],
     Field(discriminator="type"),
 ]
 
