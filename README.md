@@ -166,6 +166,18 @@ The frontend landing page (`/`) lets users choose their topic (Databricks or Fab
 
 **Microsoft Fabric skill** — 8 architecture patterns (Lakehouse, Data Warehouse, Real-Time Intelligence, Data Mesh, Migration, DWH Replacement, IoT, Hybrid), Fabric-native capacity/licensing guidance, and OneLake-centric design playbooks.
 
+### How Skill Routing Works
+
+Each session loads **only** the skill matching the user's chosen topic — the AI never sees content from other domains:
+
+1. User picks a topic on the landing page (e.g. Fabric) → navigates to `/session/fabric`
+2. The frontend opens a WebSocket with `?skill=fabric`
+3. The backend reads the `skill` query parameter and creates a `CopilotAgent(skill="fabric")`
+4. The agent looks up `_SKILL_DIRECTORIES["fabric"]` → `["./skills/fabric-ads-session"]` and passes those directories to the GitHub Copilot SDK
+5. The SDK loads **only** the Fabric `SKILL.md` manifest and `references/` docs — Databricks content is never loaded
+
+The domain-agnostic ADS methodology (conversation phases, voice rules, diagram conventions) lives in the backend system prompt and applies to all skills equally. Domain-specific knowledge — architecture patterns, migration playbooks, trade-off tables — comes exclusively from the loaded skill.
+
 ## Project Structure
 
 ```
