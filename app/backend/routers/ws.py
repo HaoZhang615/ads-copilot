@@ -19,6 +19,7 @@ from app.backend.models.ws_messages import (
     ControlMessage,
     ErrorMessage,
     IncomingMessage,
+    RestoreHistoryMessage,
     SessionSummaryChunkMessage,
     StateMessage,
     TextMessage,
@@ -462,6 +463,43 @@ async def _voicelive_listener(
                     pass
 
 
+
+async def _restore_history(
+    ws: WebSocket,
+    session: Session,
+    msg: RestoreHistoryMessage,
+    agent_lock: asyncio.Lock,
+) -> None:
+    """Restore conversation context from a previous session after mode toggle.
+
+    Runs inside agent_lock so it completes before any new user messages.
+    """
+    async with agent_lock:
+        try:
+            # Populate the session-level history (used for summary generation).
+            session.conversation_history = [
+                {"role": m.get("role", "user"), "content": m.get("content", "")}
+                for m in msg.messages
+                if m.get("content")
+            ]
+            session.turn_count = sum(
+                1 for m in session.conversation_history if m.get("role") == "user"
+            )
+            # Restore context inside the Copilot agent so it remembers the conversation.
+            await session.copilot.restore_conversation_context(session.conversation_history)
+            logger.info(
+                "Restored %d history messages for session %s",
+                len(session.conversation_history),
+                session.session_id,
+            )
+        except Exception:
+            logger.warning("Failed to restore conversation history", exc_info=True)
+            await _send_msg(
+                ws,
+                ErrorMessage(message="Failed to restore conversation context").model_dump(),
+            )
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -515,6 +553,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     agent_tasks.append(avatar_task)
             elif isinstance(msg, AvatarIceRequest):
                 await _handle_avatar_ice_request(websocket, session)
+            elif isinstance(msg, RestoreHistoryMessage):
+                # Mode toggle reconnect: restore conversation context
+                task = asyncio.create_task(
+                    _restore_history(websocket, session, msg, agent_lock),
+                    name="restore-history",
+                )
+                agent_tasks.append(task)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")

@@ -345,6 +345,49 @@ class CopilotAgent:
             "content": "".join(full_response),
         })
 
+    async def restore_conversation_context(self, history: list[dict[str, str]]) -> None:
+        """Restore conversation context after a mode-toggle reconnect.
+
+        Sends a hidden context message to the Copilot session so it is aware
+        of the prior conversation.  Also populates the local history list.
+        """
+        if not history:
+            return
+
+        # Populate local history for summary generation later.
+        self._conversation_history = list(history)
+
+        if not self._client or not self._session:
+            logger.warning("Cannot restore context: agent not started")
+            return
+
+        # Build a compact transcript for the context injection.
+        transcript_lines: list[str] = []
+        for entry in history:
+            role = entry.get("role", "unknown").upper()
+            content = entry.get("content", "")
+            transcript_lines.append(f"{role}: {content}")
+        transcript = "\n\n".join(transcript_lines)
+
+        context_prompt = (
+            "[SYSTEM CONTEXT RESTORATION] The user has switched conversation "
+            "modes (between lite and full). The conversation below is the "
+            "complete history of the session so far. Continue the Architecture "
+            "Design Session from where it left off. Do NOT greet or restart. "
+            "Do NOT summarize what happened — just acknowledge you are ready "
+            "to continue and respond naturally to the user's next message.\n\n"
+            "CONVERSATION SO FAR:\n\n"
+            f"{transcript}"
+        )
+
+        # Send the context and drain the response (we don't surface it).
+        try:
+            async for _ in self.send_message(context_prompt):
+                pass  # drain response
+            logger.info("Conversation context restored (%d turns)", len(history))
+        except Exception:
+            logger.warning("Failed to restore conversation context", exc_info=True)
+
     async def generate_summary(self, conversation_history: list[dict[str, str]]) -> AsyncGenerator[str, None]:
         """Generate a structured session summary document from the conversation history.
 

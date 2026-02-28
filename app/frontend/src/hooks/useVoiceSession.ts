@@ -88,6 +88,14 @@ export function useVoiceSession(options?: { skill?: string }): UseVoiceSessionRe
   const liteModeRef = useRef(liteMode);
   liteModeRef.current = liteMode;
 
+  // Ref mirror for messages so the setLiteMode closure reads the latest list.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // When non-null, a mode-toggle reconnect is in progress and the history
+  // should be sent to the backend once the new WS connection opens.
+  const pendingHistoryRef = useRef<Array<{ role: string; content: string }> | null>(null);
+
   // Stores the base WS URL (fetched from /api/config once) so reconnections
   // triggered by setLiteMode don't need to re-fetch.
   const wsBaseUrlRef = useRef<string>(DEFAULT_WS_URL);
@@ -310,6 +318,17 @@ export function useVoiceSession(options?: { skill?: string }): UseVoiceSessionRe
 
     unsubscribeRef.current = ws.onMessage((msg: IncomingMessage) => {
       handleMessageRef.current?.(msg);
+
+      // After a mode-toggle reconnect, once we receive any message from the
+      // backend (proving the connection is alive), send the saved history.
+      if (pendingHistoryRef.current) {
+        const historyToRestore = pendingHistoryRef.current;
+        pendingHistoryRef.current = null;
+        ws.send({
+          type: "restore_history" as const,
+          messages: historyToRestore,
+        });
+      }
     });
 
     ws.connect();
@@ -379,7 +398,12 @@ export function useVoiceSession(options?: { skill?: string }): UseVoiceSessionRe
       // The backend will create a NEW session on reconnect, but the frontend
       // conversation stays visible.
 
-      // Reconnect with new ?lite= param → backend creates a new session
+      // Reconnect with new ?lite= param → backend creates a new session.
+      // Stash conversation history so it can be sent once the new WS opens.
+      pendingHistoryRef.current = messagesRef.current
+        .filter((m) => m.content && !m.content.startsWith("⚠"))
+        .map((m) => ({ role: m.role, content: m.content }));
+
       teardownWs();
       connectWs(enabled);
     },
