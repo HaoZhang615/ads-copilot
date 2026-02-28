@@ -14,6 +14,20 @@
   --danger: #FF3621;
   --success: #22c55e;
   --muted: #9e9ea7;
+  /* Topic theme defaults (Databricks) */
+  --topic-accent: #FF3621;
+  --topic-accent-hover: #e02e1a;
+  --topic-accent-light: #ff6b57;
+  --topic-gradient-start: #0078D4;
+  --topic-gradient-end: #FF3621;
+}
+
+[data-topic="fabric"] {
+  --topic-accent: #008575;
+  --topic-accent-hover: #006b5e;
+  --topic-accent-light: #33a899;
+  --topic-gradient-start: #0078D4;
+  --topic-gradient-end: #008575;
 }
 
 body {

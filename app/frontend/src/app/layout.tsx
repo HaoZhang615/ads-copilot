@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Azure Databricks ADS - Voice Assistant",
+  title: "ADS Copilot - Architecture Design Sessions",
   description:
-    "Voice-enabled Architecture Design Session for Azure Databricks solutions",
+    "Voice-enabled AI copilot for Architecture Design Sessions",
 };
 
 export default function RootLayout({

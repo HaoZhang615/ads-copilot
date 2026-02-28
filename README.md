@@ -20,7 +20,7 @@ ADS Copilot is an AI agent that runs Architecture Design Sessions the way a seni
 
 Works like a senior SA pair: it knows when to push back on "we just need a data lake" and when to surface the three architectural patterns that actually fit the requirements. It looks up real-time Azure documentation via MCP servers so answers stay current.
 
-Ships with an Azure Databricks domain skill out of the box. The pluggable skill architecture means you can swap in any domain — Microsoft Fabric, Azure AI Foundry, Contact Centers, SAP migrations — without touching the agent core.
+Ships with Azure Databricks and Microsoft Fabric domain skills out of the box. The pluggable skill architecture means you can swap in any domain — Azure AI Foundry, Contact Centers, SAP migrations — without touching the agent core. A landing page lets users pick their topic; the conversation UI adapts its branding per domain.
 
 ## Key Features
 
@@ -30,10 +30,10 @@ Ships with an Azure Databricks domain skill out of the box. The pluggable skill 
 | 🗣️ | AI speech synthesis | Azure Speech TTS with natural prosody |
 | 🧑‍💼 | Talking avatar | Azure Speech Avatar rendered via WebRTC |
 | 💬 | Lite conversation mode | Text-only toggle — no voice or avatar required |
-| 📊 | Live Mermaid diagram generation | 8 architecture patterns, rendered in browser |
+| 📊 | Live Mermaid diagram generation | 8+ architecture patterns per skill, rendered in browser |
 | 📄 | Session summary export | Download as Markdown or optimized PDF (JPEG-compressed, ~2-4 MB) with rendered diagrams |
 | 📧 | Email session summary | Send PDF summary via email (with automatic BCC) using Azure Logic App + Outlook |
-| 🔌 | Pluggable domain skills | Swap knowledge domains without code changes |
+| 🔌 | Pluggable domain skills | Swap knowledge domains without code changes — ships with Databricks + Fabric |
 | 🔍 | MCP server integration | Microsoft Learn real-time docs lookup |
 | 🏗️ | GitHub Copilot SDK backend | Agent loop with structured tool calls |
 | ☁️ | One-click Azure deployment | `azd up` + Bicep IaC |
@@ -144,42 +144,60 @@ This provisions: Azure Container Apps (backend + frontend), Azure AI Services, A
 
 The agent's ADS methodology — conversation flow, phase transitions, probing question banks, trade-off evaluation — lives in the backend system prompt and is domain-agnostic.
 
-Domain knowledge lives in skill directories:
+Domain knowledge lives in skill directories under `skills/`:
 
 ```
-databricks-ads-session/
-  SKILL.md          # Skill manifest: conversation phases, question banks
-  references/       # Architecture patterns, migration playbooks, industry templates
-  scripts/          # Mermaid diagram generator (8 patterns)
+skills/
+  databricks-ads-session/   # Azure Databricks domain
+    SKILL.md                # Skill manifest: conversation phases, question banks
+    references/             # Architecture patterns, migration playbooks, industry templates
+    scripts/                # Mermaid diagram generator (8 patterns)
+  fabric-ads-session/       # Microsoft Fabric domain
+    SKILL.md                # Skill manifest for Fabric
+    references/             # Fabric patterns, migration playbooks, industry templates
+    scripts/                # Mermaid diagram generator (8 patterns)
 ```
 
-To add a new domain: create a skill directory with a `SKILL.md` manifest and `references/` docs, then point the agent's skill loader at it. No changes to the agent core required.
+To add a new domain: create a skill directory under `skills/` with a `SKILL.md` manifest and `references/` docs, register it in the backend's `_SKILL_DIRECTORIES` dict in `copilot_agent.py`, and add a topic card to the frontend landing page. No changes to the agent core required.
 
-The current Databricks skill includes 8 architecture patterns (Medallion, Streaming, ML Platform, Data Mesh, Migration, DWH Replacement, IoT, Hybrid), industry-specific question banks, and source-system migration playbooks.
+The frontend landing page (`/`) lets users choose their topic (Databricks or Fabric), then loads the conversation UI at `/session/[topic]` with per-topic branding and colors.
+
+**Azure Databricks skill** — 8 architecture patterns (Medallion, Streaming, ML Platform, Data Mesh, Migration, DWH Replacement, IoT, Hybrid), industry-specific question banks, and source-system migration playbooks.
+
+**Microsoft Fabric skill** — 8 architecture patterns (Lakehouse, Data Warehouse, Real-Time Intelligence, Data Mesh, Migration, DWH Replacement, IoT, Hybrid), Fabric-native capacity/licensing guidance, and OneLake-centric design playbooks.
 
 ## Project Structure
 
 ```
 ├── app/
-│   ├── backend/          # FastAPI + WebSocket server
-│   │   ├── services/     # VoiceLive, TTS, Avatar, Copilot Agent
-│   │   ├── routers/      # WebSocket + health endpoints
-│   │   ├── models/       # Pydantic models
+│   ├── backend/              # FastAPI + WebSocket server
+│   │   ├── services/         # VoiceLive, TTS, Avatar, Copilot Agent
+│   │   ├── routers/          # WebSocket + health endpoints
+│   │   ├── models/           # Pydantic models
 │   │   └── Dockerfile
-│   ├── frontend/         # Next.js 15 + React 19
+│   ├── frontend/             # Next.js 15 + React 19
 │   │   ├── src/
+│   │   │   ├── app/
+│   │   │   │   ├── page.tsx              # Landing page (topic selection)
+│   │   │   │   ├── session/[topic]/      # Dynamic conversation route
+│   │   │   │   └── api/                  # API routes (config, email)
 │   │   │   ├── components/   # ChatInterface, MessageBubble, AvatarPanel
 │   │   │   ├── hooks/        # useVoiceSession, useAudioCapture, useWebRTC
 │   │   │   └── lib/          # WebSocket protocol
 │   │   └── Dockerfile
 │   └── docker-compose.yml
-├── databricks-ads-session/   # Pluggable domain skill
-│   ├── SKILL.md              # Skill manifest
-│   ├── references/           # Domain knowledge docs
-│   └── scripts/              # Mermaid diagram generator
+├── skills/                       # Pluggable domain skills
+│   ├── databricks-ads-session/   # Azure Databricks knowledge
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   └── scripts/
+│   └── fabric-ads-session/       # Microsoft Fabric knowledge
+│       ├── SKILL.md
+│       ├── references/
+│       └── scripts/
 ├── infra/                    # Azure Bicep IaC
-├── .env.sample               # Environment template
-└── azure.yaml                # azd configuration
+├── .env.sample              # Environment template
+└── azure.yaml               # azd configuration
 ```
 
 ## Tech Stack

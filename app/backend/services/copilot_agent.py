@@ -199,7 +199,11 @@ _SYSTEM_PROMPT = (
     "the source URL when referencing specific documentation."
 )
 
-_SKILL_DIRECTORIES = ["./architecture-diagramming", "./databricks-ads-session"]
+_SKILL_DIRECTORIES: dict[str, list[str]] = {
+    "databricks": ["./architecture-diagramming", "./skills/databricks-ads-session"],
+    "fabric": ["./architecture-diagramming", "./skills/fabric-ads-session"],
+}
+_DEFAULT_SKILL = "databricks"
 _MCP_SERVERS: dict[str, MCPRemoteServerConfig] = {
     "microsoft-learn": {
         "type": "http",
@@ -213,11 +217,13 @@ _STREAM_DONE = object()
 
 
 class CopilotAgent:
-    def __init__(self) -> None:
+    def __init__(self, skill: str = _DEFAULT_SKILL) -> None:
         self._client: CopilotClient | None = None
         self._session: CopilotSession | None = None
         self._conversation_history: list[dict[str, str]] = []
         self._unsubscribe: callable | None = None
+        self._skill = skill
+        self._skill_dirs = _SKILL_DIRECTORIES.get(skill, _SKILL_DIRECTORIES[_DEFAULT_SKILL])
 
     async def start(self) -> None:
         options: dict = {}
@@ -230,7 +236,7 @@ class CopilotAgent:
 
         self._session = await self._client.create_session({
             "model": "claude-sonnet-4.6",
-            "skill_directories": _SKILL_DIRECTORIES,
+            "skill_directories": self._skill_dirs,
             "system_message": {"content": _SYSTEM_PROMPT},
             "mcp_servers": _MCP_SERVERS,
             "on_permission_request": PermissionHandler.approve_all,

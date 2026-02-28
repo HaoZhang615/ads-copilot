@@ -476,7 +476,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     try:
         user_id = websocket.query_params.get("user_id", "anonymous")
         lite_mode = websocket.query_params.get("lite", "").lower() in ("1", "true")
-        session = await session_manager.create_session(user_id, lite_mode=lite_mode)
+        skill = websocket.query_params.get("skill", "databricks")
+        session = await session_manager.create_session(user_id, lite_mode=lite_mode, skill=skill)
         await _send_msg(websocket, {
             "type": "session_created",
             "session_id": session.session_id,

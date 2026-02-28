@@ -9,9 +9,11 @@
 The repo contains:
 
 - **Backend** (`app/backend/`) — FastAPI server with WebSocket endpoint, Copilot agent, VoiceLive STT, Speech TTS, and Avatar services
-- **Frontend** (`app/frontend/`) — Next.js 15 / React 19 / Tailwind CSS 4 SPA with voice capture, WebRTC avatar, and Mermaid diagram rendering
-- **Pluggable domain skill** (`databricks-ads-session/`) — Azure Databricks knowledge: SKILL.md manifest, 8 reference documents, Mermaid diagram generator script
-- **Mirror skill** (`.github/skills/databricks-ads-session/`) — Duplicate for GitHub Copilot skill discovery (must stay in sync with root skill)
+- **Frontend** (`app/frontend/`) — Next.js 15 / React 19 / Tailwind CSS 4 SPA with landing page (topic selection), per-topic conversation UI, voice capture, WebRTC avatar, and Mermaid diagram rendering
+- **Pluggable domain skills** (`skills/`) — Two domain skills:
+  - `skills/databricks-ads-session/` — Azure Databricks knowledge: SKILL.md manifest, 8 reference documents, Mermaid diagram generator script
+  - `skills/fabric-ads-session/` — Microsoft Fabric knowledge: SKILL.md manifest, 8 reference documents, Mermaid diagram generator script
+- **Mirror skills** (`.github/skills/`) — Duplicates for GitHub Copilot skill discovery (must stay in sync with `skills/` directory)
 - **Infrastructure** (`infra/`) — Azure Bicep IaC for Container Apps, AI Services, Speech, Key Vault, Container Registry
 - **Docker Compose** (`app/docker-compose.yml`) — Local dev stack
 
@@ -64,17 +66,21 @@ azd up
 ### Mermaid Diagram Generator (Skill Script)
 
 ```bash
-# List available architecture patterns
-python databricks-ads-session/scripts/generate_architecture.py --list
+# List available architecture patterns (Databricks)
+python skills/databricks-ads-session/scripts/generate_architecture.py --list
 
 # Generate a specific pattern to stdout
-python databricks-ads-session/scripts/generate_architecture.py --pattern medallion
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion
 
 # Generate with custom params
-python databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform --params '{"include_monitoring": true}'
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform --params '{"include_monitoring": true}'
 
 # Render to PNG (requires Node.js / npx)
-python databricks-ads-session/scripts/generate_architecture.py --pattern medallion --render --filename my_diagram
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion --render --filename my_diagram
+
+# Fabric skill patterns
+python skills/fabric-ads-session/scripts/generate_architecture.py --list
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern lakehouse
 ```
 
 ### Smoke Tests (Manual)
@@ -83,15 +89,25 @@ python databricks-ads-session/scripts/generate_architecture.py --pattern medalli
 # Backend compiles
 python -c "import app.backend.main"
 
-# All 8 diagram patterns generate without errors
-python databricks-ads-session/scripts/generate_architecture.py --pattern medallion
-python databricks-ads-session/scripts/generate_architecture.py --pattern streaming
-python databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform
-python databricks-ads-session/scripts/generate_architecture.py --pattern data-mesh
-python databricks-ads-session/scripts/generate_architecture.py --pattern migration
-python databricks-ads-session/scripts/generate_architecture.py --pattern dwh-replacement
-python databricks-ads-session/scripts/generate_architecture.py --pattern iot
-python databricks-ads-session/scripts/generate_architecture.py --pattern hybrid
+# Databricks skill — all 8 diagram patterns generate without errors
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern streaming
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern data-mesh
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern migration
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern dwh-replacement
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern iot
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern hybrid
+
+# Fabric skill — all 8 diagram patterns generate without errors
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern lakehouse
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern warehouse
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern realtime
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern data-mesh
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern migration
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern dwh-replacement
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern iot
+python skills/fabric-ads-session/scripts/generate_architecture.py --pattern hybrid
 
 # Frontend builds
 cd app/frontend && npm run build
@@ -116,7 +132,7 @@ cd app/frontend && npm run build
 - **No linter or formatter** is configured — maintain consistency with existing style.
 - **Dependencies**: Listed in `requirements.txt` (runtime) and `pyproject.toml`. Do not add new dependencies without discussion.
 
-### Python (Diagram Script — `databricks-ads-session/scripts/generate_architecture.py`)
+### Python (Diagram Scripts — `skills/*/scripts/generate_architecture.py`)
 
 - **Stdlib only** — no pip packages. Uses `argparse`, `json`, `os`, `subprocess`, `sys`, `textwrap`, `typing`.
 - **Purely functional** — no classes, registry dict `PATTERNS` maps pattern names to generators.
@@ -173,7 +189,7 @@ cd app/frontend && npm run build
 │   │   ├── config.py                   # pydantic_settings config from .env
 │   │   ├── services/
 │   │   │   ├── copilot_agent.py        # GitHub Copilot SDK agent + system prompt
-│   │   │   ├── session_manager.py      # Session lifecycle, lite mode support
+│   │   │   ├── session_manager.py      # Session lifecycle, lite mode + skill support
 │   │   │   ├── voicelive_service.py    # Azure VoiceLive real-time STT
 │   │   │   ├── speech_tts_service.py   # Azure Speech TTS
 │   │   │   ├── avatar_tts_service.py   # Azure Speech Avatar (WebRTC)
@@ -191,11 +207,14 @@ cd app/frontend && npm run build
 │   │   ├── src/
 │   │   │   ├── app/                    # Next.js App Router pages
 │   │   │   │   ├── layout.tsx
-│   │   │   │   ├── page.tsx
+│   │   │   │   ├── page.tsx            # Landing page (topic selection)
 │   │   │   │   ├── globals.css
-│   │   │   │   └── api/               # API routes (config endpoint)
+│   │   │   │   ├── session/
+│   │   │   │   │   └── [topic]/
+│   │   │   │   │       └── page.tsx    # Dynamic conversation route
+│   │   │   │   └── api/               # API routes (config, email)
 │   │   │   ├── components/
-│   │   │   │   ├── ChatInterface.tsx   # Main chat UI + LiteModeToggle
+│   │   │   │   ├── ChatInterface.tsx   # Main chat UI (topic-aware) + LiteModeToggle
 │   │   │   │   ├── MessageBubble.tsx   # Message rendering + Mermaid (React.memo)
 │   │   │   │   ├── MermaidDiagram.tsx  # Mermaid diagram renderer
 │   │   │   │   ├── AvatarPanel.tsx     # WebRTC avatar video panel
@@ -203,7 +222,7 @@ cd app/frontend && npm run build
 │   │   │   │   ├── TextInput.tsx       # Text input for lite mode
 │   │   │   │   └── WaveformVisualizer.tsx  # Audio level visualizer
 │   │   │   ├── hooks/
-│   │   │   │   ├── useVoiceSession.ts  # Core session hook (WS, lite mode, state)
+│   │   │   │   ├── useVoiceSession.ts  # Core session hook (WS, lite mode, skill, state)
 │   │   │   │   ├── useAudioCapture.ts  # Microphone capture hook
 │   │   │   │   ├── useAudioPlayback.ts # TTS audio playback hook
 │   │   │   │   └── useWebRTC.ts        # Avatar WebRTC connection hook
@@ -213,21 +232,37 @@ cd app/frontend && npm run build
 │   │   ├── Dockerfile
 │   │   └── package.json
 │   └── docker-compose.yml
-├── databricks-ads-session/             # Pluggable domain skill (Azure Databricks)
-│   ├── SKILL.md                        # Skill manifest v3.0
-│   ├── references/
-│   │   ├── conversation-framework.md   # Phase execution details & transitions
-│   │   ├── databricks-patterns.md      # Architecture pattern catalog (8 patterns)
-│   │   ├── industry-templates.md       # Industry-specific question banks
-│   │   ├── migration-patterns.md       # Source-system migration mappings
-│   │   ├── probing-questions.md        # Deep-dive question banks for vague answers
-│   │   ├── readiness-checklist.md      # Info completeness scoring before diagram gen
-│   │   ├── technical-deep-dives.md     # Technical spike playbooks
-│   │   └── trade-offs-and-failure-modes.md  # Trade-off tables + failure playbooks
-│   └── scripts/
-│       └── generate_architecture.py    # CLI Mermaid diagram generator
+├── skills/                             # Pluggable domain skills
+│   ├── databricks-ads-session/         # Azure Databricks domain
+│   │   ├── SKILL.md                    # Skill manifest v3.0
+│   │   ├── references/
+│   │   │   ├── conversation-framework.md   # Phase execution details & transitions
+│   │   │   ├── databricks-patterns.md      # Architecture pattern catalog (8 patterns)
+│   │   │   ├── industry-templates.md       # Industry-specific question banks
+│   │   │   ├── migration-patterns.md       # Source-system migration mappings
+│   │   │   ├── probing-questions.md        # Deep-dive question banks for vague answers
+│   │   │   ├── readiness-checklist.md      # Info completeness scoring before diagram gen
+│   │   │   ├── technical-deep-dives.md     # Technical spike playbooks
+│   │   │   └── trade-offs-and-failure-modes.md  # Trade-off tables + failure playbooks
+│   │   └── scripts/
+│   │       └── generate_architecture.py    # CLI Mermaid diagram generator
+│   └── fabric-ads-session/             # Microsoft Fabric domain
+│       ├── SKILL.md                    # Skill manifest v1.0
+│       ├── references/
+│       │   ├── conversation-framework.md   # Phase execution details & transitions
+│       │   ├── fabric-patterns.md          # Architecture pattern catalog (8 patterns)
+│       │   ├── industry-templates.md       # Industry-specific question banks
+│       │   ├── migration-patterns.md       # Source-system migration mappings
+│       │   ├── probing-questions.md        # Deep-dive question banks for vague answers
+│       │   ├── readiness-checklist.md      # Info completeness scoring before diagram gen
+│       │   ├── technical-deep-dives.md     # Technical spike playbooks
+│       │   └── trade-offs-and-failure-modes.md  # Trade-off tables + failure playbooks
+│       └── scripts/
+│           └── generate_architecture.py    # CLI Mermaid diagram generator
 ├── .github/
-│   ├── skills/databricks-ads-session/  # Mirror of root skill for GitHub Copilot discovery
+│   ├── skills/                         # Mirrors of skills/ for GitHub Copilot discovery
+│   │   ├── databricks-ads-session/
+│   │   └── fabric-ads-session/
 │   ├── ISSUE_TEMPLATE/                 # Bug report + feature request templates
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── infra/                              # Azure Bicep IaC
@@ -248,11 +283,13 @@ cd app/frontend && npm run build
 
 ## Key Architecture Decisions
 
-1. **Pluggable skill architecture**: Domain knowledge (Azure Databricks) lives in `databricks-ads-session/SKILL.md` + `references/`. The ADS methodology (conversation phases, probing strategies, trade-off evaluation) lives in the backend system prompt (`copilot_agent.py`) and is domain-agnostic. To add a new domain, create a new skill directory — no agent code changes needed.
+1. **Pluggable skill architecture**: Domain knowledge lives in `skills/` subdirectories. Each skill has a `SKILL.md` manifest + `references/` docs. The ADS methodology (conversation phases, probing strategies, trade-off evaluation) lives in the backend system prompt (`copilot_agent.py`) and is domain-agnostic. The backend's `_SKILL_DIRECTORIES` dict in `copilot_agent.py` maps skill names to directory paths. To add a new domain, create a new skill directory under `skills/` and register it in the dict.
 
-2. **Dual skill location**: The skill is duplicated under `.github/skills/` for GitHub Copilot discovery AND at the repo root for general agent use. **Always keep both in sync.** The `.github/skills/` path contains a nested duplicate — note the double directory: `.github/skills/databricks-ads-session/databricks-ads-session/`.
+2. **Multi-topic frontend**: The landing page (`/`) lets users choose a topic (Databricks or Fabric). The conversation UI at `/session/[topic]` loads the `ChatInterface` component with per-topic branding via CSS custom properties (`data-topic` attribute). The `useVoiceSession` hook passes `skill=<topic>` as a WebSocket query parameter to select the backend skill.
 
-3. **WebSocket-first architecture**: The backend exposes a single WebSocket endpoint (`/ws`) that orchestrates all services. Audio, text, agent responses, avatar ICE candidates, and session state all flow through this one connection. The frontend connects once and multiplexes message types via a typed protocol (`ws-protocol.ts` ↔ `ws_messages.py`).
+3. **Dual skill location**: Skills are duplicated under `.github/skills/` for GitHub Copilot discovery AND under `skills/` for the backend agent. **Always keep both in sync.** The `.github/skills/` path contains a nested duplicate — note the double directory: `.github/skills/databricks-ads-session/databricks-ads-session/`.
+
+4. **WebSocket-first architecture**: The backend exposes a single WebSocket endpoint (`/ws`) that orchestrates all services. Audio, text, agent responses, avatar ICE candidates, and session state all flow through this one connection. The frontend connects once and multiplexes message types via a typed protocol (`ws-protocol.ts` ↔ `ws_messages.py`). The `skill` query parameter (`?skill=databricks` or `?skill=fabric`) selects which domain skill to load.
 
 4. **Lite conversation mode**: The UI has a toggle that disables avatar, STT, and TTS. When lite mode is active, `?lite=1` is appended to the WebSocket URL. The backend creates the session without voice/avatar services. Toggling requires a WebSocket reconnection (conversation messages are preserved client-side).
 
@@ -270,20 +307,20 @@ cd app/frontend && npm run build
 
 ### Adding a New Domain Skill
 
-1. Create a directory: `<domain>-ads-session/`
-2. Add a `SKILL.md` manifest following the structure in `databricks-ads-session/SKILL.md`
+1. Create a directory: `skills/<domain>-ads-session/`
+2. Add a `SKILL.md` manifest following the structure in `skills/databricks-ads-session/SKILL.md`
 3. Add `references/` docs with architecture patterns, question banks, and migration playbooks
 4. (Optional) Add `scripts/generate_architecture.py` for Mermaid diagram generation
-5. Point the agent's skill loader at the new directory
-6. Mirror to `.github/skills/<domain>-ads-session/` if GitHub Copilot discovery is needed
+5. Register the skill in `app/backend/services/copilot_agent.py` `_SKILL_DIRECTORIES` dict
+6. Add a topic card to `app/frontend/src/app/page.tsx` and an entry in `ChatInterface.tsx`'s `TOPIC_CONFIG`
+7. Add CSS theme variables in `globals.css` under a `[data-topic="<domain>"]` selector
+8. Mirror to `.github/skills/<domain>-ads-session/` if GitHub Copilot discovery is needed
+### Adding a New Architecture Pattern (to an existing skill)
 
-### Adding a New Architecture Pattern (to existing Databricks skill)
-
-1. Add a `generate_<name>(params: Dict[str, Any]) -> str` function in `databricks-ads-session/scripts/generate_architecture.py`
+1. Add a `generate_<name>(params: Dict[str, Any]) -> str` function in `skills/<domain>-ads-session/scripts/generate_architecture.py`
 2. Register it in the `PATTERNS` dict with `fn`, `desc`, and `params` keys
-3. Add a corresponding section in `references/databricks-patterns.md`
-4. Update the decision tree at the top of `databricks-patterns.md`
-
+3. Add a corresponding section in `references/<domain>-patterns.md`
+4. Update the decision tree at the top of `<domain>-patterns.md`
 ### Editing Reference Documents
 
 - Keep the solutions-architect tone
@@ -292,11 +329,13 @@ cd app/frontend && npm run build
 - Add "Red Flags" and "Anti-patterns" sections where applicable
 - Cross-reference other docs with relative links
 
-### Syncing `.github/skills/` with Root
+### Syncing `.github/skills/` with `skills/`
 
-After modifying files under `databricks-ads-session/`, mirror changes to **both** locations:
+After modifying files under `skills/`, mirror changes to `.github/skills/`:
 - `.github/skills/databricks-ads-session/` (flat mirror)
 - `.github/skills/databricks-ads-session/databricks-ads-session/` (nested mirror)
+- `.github/skills/fabric-ads-session/` (flat mirror)
+- `.github/skills/fabric-ads-session/fabric-ads-session/` (nested mirror)
 
 ### Adding a Backend Service
 

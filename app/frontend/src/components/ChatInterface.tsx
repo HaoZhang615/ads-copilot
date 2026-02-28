@@ -9,6 +9,8 @@ import { AvatarPanel } from "@/components/AvatarPanel";
 import { SessionSummaryModal } from "@/components/SessionSummaryModal";
 import type { SessionState } from "@/lib/ws-protocol";
 
+type TopicId = "databricks" | "fabric";
+
 const STATE_LABELS: Record<SessionState, string> = {
   idle: "Ready",
   listening: "Listening...",
@@ -18,9 +20,29 @@ const STATE_LABELS: Record<SessionState, string> = {
 
 const STATE_COLORS: Record<SessionState, string> = {
   idle: "bg-gray-500",
-  listening: "bg-[#FF3621]",
+  listening: "bg-[var(--topic-accent)]",
   thinking: "bg-amber-500",
   speaking: "bg-[#0078D4]",
+};
+
+const TOPIC_CONFIG: Record<TopicId, {
+  label: string;
+  subtitle: string;
+  liteDescription: string;
+  fullDescription: string;
+}> = {
+  databricks: {
+    label: "Azure Databricks",
+    subtitle: "Azure Databricks",
+    liteDescription: "Text-based AI assistant for designing your Databricks solution architecture. Type your message below to begin.",
+    fullDescription: "Voice-enabled AI assistant for designing your Databricks solution architecture. Start by speaking or typing below.",
+  },
+  fabric: {
+    label: "Microsoft Fabric",
+    subtitle: "Microsoft Fabric",
+    liteDescription: "Text-based AI assistant for designing your Microsoft Fabric solution architecture. Type your message below to begin.",
+    fullDescription: "Voice-enabled AI assistant for designing your Microsoft Fabric solution architecture. Start by speaking or typing below.",
+  },
 };
 
 function AzureLogo({ className }: { className?: string }) {
@@ -74,6 +96,49 @@ function DatabricksLogo({ className }: { className?: string }) {
       />
     </svg>
   );
+}
+
+function FabricLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 36 36"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <defs>
+        <linearGradient id="fabric-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#008575" />
+          <stop offset="100%" stopColor="#0078D4" />
+        </linearGradient>
+      </defs>
+      {/* Diamond / gem shape */}
+      <path
+        d="M18 2L32 14L18 34L4 14Z"
+        fill="url(#fabric-grad)"
+      />
+      <path
+        d="M18 2L32 14H4Z"
+        fill="#008575"
+        opacity="0.9"
+      />
+      <path
+        d="M4 14L18 34L18 14Z"
+        fill="#0078D4"
+        opacity="0.7"
+      />
+      <path
+        d="M18 14L32 14L18 34Z"
+        fill="#008575"
+        opacity="0.6"
+      />
+    </svg>
+  );
+}
+
+/** Returns the topic-appropriate secondary logo component. */
+function TopicLogo({ topic, className }: { topic: TopicId; className?: string }) {
+  if (topic === "fabric") return <FabricLogo className={className} />;
+  return <DatabricksLogo className={className} />;
 }
 
 /** Stop audio playback button — shown when TTS is active. */
@@ -140,7 +205,7 @@ function LiteModeToggle({
   );
 }
 
-export function ChatInterface() {
+export function ChatInterface({ topic = "databricks" }: { topic?: TopicId }) {
   const {
     messages,
     sessionState,
@@ -162,7 +227,9 @@ export function ChatInterface() {
     sessionSummary,
     isGeneratingSummary,
     dismissSummary,
-  } = useVoiceSession();
+  } = useVoiceSession({ skill: topic });
+
+  const config = TOPIC_CONFIG[topic];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStartedRef = useRef(false);
@@ -185,13 +252,16 @@ export function ChatInterface() {
 
   return (
     <div className="flex flex-col h-full max-w-6xl mx-auto">
-      {/* Header with Azure + Databricks branding */}
-      <header className="flex items-center justify-between px-6 py-3 border-b-2 border-[var(--accent)]" style={{ borderImage: "linear-gradient(to right, #0078D4, #FF3621) 1" }}>
+      {/* Header with Azure + topic branding */}
+      <header
+        className="flex items-center justify-between px-6 py-3 border-b-2 border-[var(--accent)]"
+        style={{ borderImage: `linear-gradient(to right, var(--topic-gradient-start), var(--topic-gradient-end)) 1` }}
+      >
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <AzureLogo className="w-6 h-6" />
             <span className="text-[var(--muted)] text-sm select-none">×</span>
-            <DatabricksLogo className="w-6 h-6" />
+            <TopicLogo topic={topic} className="w-6 h-6" />
           </div>
           <div className="h-5 w-px bg-[var(--border)]" />
           <div>
@@ -199,7 +269,7 @@ export function ChatInterface() {
               Architecture Design Session
             </h1>
             <span className="text-xs text-[var(--muted)] hidden sm:inline">
-              Azure Databricks
+              {config.subtitle}
             </span>
           </div>
         </div>
@@ -248,10 +318,10 @@ export function ChatInterface() {
                 <div className="flex items-center gap-4 mb-6">
                   <AzureLogo className="w-12 h-12" />
                   <span className="text-2xl text-[var(--border)] font-light select-none">×</span>
-                  <DatabricksLogo className="w-12 h-12" />
+                  <TopicLogo topic={topic} className="w-12 h-12" />
                 </div>
                 <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
-                  Azure Databricks
+                  {config.label}
                 </h2>
                 <h3 className="text-lg text-[var(--accent-light)] mb-3">
                   Architecture Design Session
@@ -259,8 +329,7 @@ export function ChatInterface() {
                 {liteMode ? (
                   <>
                     <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed">
-                      Text-based AI assistant for designing your Databricks solution
-                      architecture. Type your message below to begin.
+                      {config.liteDescription}
                     </p>
                     <div className="mt-6 flex items-center gap-2 text-xs text-[var(--muted)]">
                       <svg
@@ -281,8 +350,7 @@ export function ChatInterface() {
                 ) : (
                   <>
                     <p className="text-sm text-[var(--muted)] max-w-md leading-relaxed">
-                      Voice-enabled AI assistant for designing your Databricks solution
-                      architecture. Start by speaking or typing below.
+                      {config.fullDescription}
                     </p>
                     <div className="mt-6 flex items-center gap-2 text-xs text-[var(--muted)]">
                       <svg

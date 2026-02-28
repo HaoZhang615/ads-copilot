@@ -60,14 +60,21 @@ function generateId(): string {
   return `msg-${Date.now()}-${messageIdCounter}`;
 }
 
-/** Build the final WS URL, appending ?lite=1 when lite mode is active. */
-function buildWsUrl(base: string, lite: boolean): string {
-  if (!lite) return base;
+/** Build the final WS URL, appending query params for lite mode and skill. */
+function buildWsUrl(base: string, lite: boolean, skill: string): string {
+  const params: string[] = [];
+  if (lite) params.push("lite=1");
+  if (skill) params.push(`skill=${encodeURIComponent(skill)}`);
+  if (params.length === 0) return base;
   const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}lite=1`;
+  return `${base}${sep}${params.join("&")}`;
 }
 
-export function useVoiceSession(): UseVoiceSessionReturn {
+export function useVoiceSession(options?: { skill?: string }): UseVoiceSessionReturn {
+  const skill = options?.skill ?? "databricks";
+  const skillRef = useRef(skill);
+  skillRef.current = skill;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [isConnected, setIsConnected] = useState(false);
@@ -293,7 +300,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   /** Create a new WS connection using wsBaseUrlRef + current lite mode. */
   const connectWs = useCallback((lite: boolean) => {
-    const url = buildWsUrl(wsBaseUrlRef.current, lite);
+    const url = buildWsUrl(wsBaseUrlRef.current, lite, skillRef.current);
     const ws = new WebSocketManager(url);
     wsRef.current = ws;
 
