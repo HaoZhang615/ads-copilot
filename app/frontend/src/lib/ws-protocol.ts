@@ -26,12 +26,19 @@ export type OutgoingAvatarIceRequestMessage = {
   type: "avatar_ice_request";
 };
 
+export type OutgoingRestoreHistoryMessage = {
+  type: "restore_history";
+  messages: Array<{ role: string; content: string }>;
+};
+
+
 export type OutgoingMessage =
   | OutgoingAudioMessage
   | OutgoingControlMessage
   | OutgoingTextMessage
   | OutgoingAvatarOfferMessage
-  | OutgoingAvatarIceRequestMessage;
+  | OutgoingAvatarIceRequestMessage
+  | OutgoingRestoreHistoryMessage;
 
 export type IncomingTranscriptMessage = {
   type: "transcript";

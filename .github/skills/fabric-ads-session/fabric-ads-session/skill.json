@@ -1,0 +1,13 @@
+{
+  "name": "fabric-ads-session",
+  "description": "Conduct Microsoft Fabric Architecture Design Sessions (ADS). Orchestrate a structured, multi-turn conversation to gather solution requirements, then generate a Fabric-centric architecture diagram.",
+  "version": "1.0.0",
+  "prompts": [
+    {
+      "name": "ads-session",
+      "description": "Run a full ADS session",
+      "path": "SKILL.md"
+    }
+  ],
+  "tools": []
+}

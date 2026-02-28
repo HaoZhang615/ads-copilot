@@ -60,14 +60,21 @@ function generateId(): string {
   return `msg-${Date.now()}-${messageIdCounter}`;
 }
 
-/** Build the final WS URL, appending ?lite=1 when lite mode is active. */
-function buildWsUrl(base: string, lite: boolean): string {
-  if (!lite) return base;
+/** Build the final WS URL, appending query params for lite mode and skill. */
+function buildWsUrl(base: string, lite: boolean, skill: string): string {
+  const params: string[] = [];
+  if (lite) params.push("lite=1");
+  if (skill) params.push(`skill=${encodeURIComponent(skill)}`);
+  if (params.length === 0) return base;
   const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}lite=1`;
+  return `${base}${sep}${params.join("&")}`;
 }
 
-export function useVoiceSession(): UseVoiceSessionReturn {
+export function useVoiceSession(options?: { skill?: string }): UseVoiceSessionReturn {
+  const skill = options?.skill ?? "databricks";
+  const skillRef = useRef(skill);
+  skillRef.current = skill;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [isConnected, setIsConnected] = useState(false);
@@ -80,6 +87,14 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   // Ref mirror so the message handler closure always reads the latest value.
   const liteModeRef = useRef(liteMode);
   liteModeRef.current = liteMode;
+
+  // Ref mirror for messages so the setLiteMode closure reads the latest list.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // When non-null, a mode-toggle reconnect is in progress and the history
+  // should be sent to the backend once the new WS connection opens.
+  const pendingHistoryRef = useRef<Array<{ role: string; content: string }> | null>(null);
 
   // Stores the base WS URL (fetched from /api/config once) so reconnections
   // triggered by setLiteMode don't need to re-fetch.
@@ -293,7 +308,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   /** Create a new WS connection using wsBaseUrlRef + current lite mode. */
   const connectWs = useCallback((lite: boolean) => {
-    const url = buildWsUrl(wsBaseUrlRef.current, lite);
+    const url = buildWsUrl(wsBaseUrlRef.current, lite, skillRef.current);
     const ws = new WebSocketManager(url);
     wsRef.current = ws;
 
@@ -303,6 +318,17 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
     unsubscribeRef.current = ws.onMessage((msg: IncomingMessage) => {
       handleMessageRef.current?.(msg);
+
+      // After a mode-toggle reconnect, once we receive any message from the
+      // backend (proving the connection is alive), send the saved history.
+      if (pendingHistoryRef.current) {
+        const historyToRestore = pendingHistoryRef.current;
+        pendingHistoryRef.current = null;
+        ws.send({
+          type: "restore_history" as const,
+          messages: historyToRestore,
+        });
+      }
     });
 
     ws.connect();
@@ -372,7 +398,12 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       // The backend will create a NEW session on reconnect, but the frontend
       // conversation stays visible.
 
-      // Reconnect with new ?lite= param → backend creates a new session
+      // Reconnect with new ?lite= param → backend creates a new session.
+      // Stash conversation history so it can be sent once the new WS opens.
+      pendingHistoryRef.current = messagesRef.current
+        .filter((m) => m.content && !m.content.startsWith("⚠"))
+        .map((m) => ({ role: m.role, content: m.content }));
+
       teardownWs();
       connectWs(enabled);
     },
