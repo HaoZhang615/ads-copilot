@@ -12,7 +12,7 @@ services:
       - BACKEND_PORT=8000
       - CORS_ORIGINS=http://localhost:3000
     volumes:
-      - ../databricks-ads-session:/workspace/databricks-ads-session:ro
+      - ../skills:/workspace/skills:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

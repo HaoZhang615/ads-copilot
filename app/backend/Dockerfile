@@ -11,7 +11,7 @@ RUN apt-get update && \
 
 COPY app/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY databricks-ads-session /workspace/databricks-ads-session
+COPY skills /workspace/skills
 COPY app/backend /workspace/app/backend
 
 ENV PYTHONPATH=/workspace
