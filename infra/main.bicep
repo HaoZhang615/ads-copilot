@@ -19,6 +19,7 @@ var abbrevs = {
   managedIdentity: 'id'
   cognitiveServices: 'cog'
   keyVault: 'kv'
+  logicApp: 'la'
   backendApp: 'ca'
   frontendApp: 'ca'
 }
@@ -74,6 +75,14 @@ module keyVault 'modules/key-vault.bicep' = {
     location: location
     principalId: managedIdentity.outputs.principalId
     copilotGithubToken: copilotGithubToken
+  }
+}
+
+module logicApp 'modules/logic-app.bicep' = {
+  name: 'logic-app'
+  params: {
+    name: '${abbrevs.logicApp}-${environmentName}'
+    location: location
   }
 }
 
@@ -155,6 +164,10 @@ module backendApp 'modules/container-app.bicep' = {
         name: 'AVATAR_VOICE'
         value: avatarVoice
       }
+      {
+        name: 'LOGIC_APP_TRIGGER_URL'
+        value: logicApp.outputs.triggerUrl
+      }
     ]
     secrets: [
       {
@@ -201,3 +214,4 @@ output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.logi
 output BACKEND_URL string = backendApp.outputs.uri
 output FRONTEND_URL string = frontendApp.outputs.uri
 output AZURE_VOICELIVE_ENDPOINT string = cognitiveServices.outputs.endpoint
+output LOGIC_APP_TRIGGER_URL string = logicApp.outputs.triggerUrl

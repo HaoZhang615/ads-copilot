@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MermaidDiagram } from "./MermaidDiagram";
+
+/** Lazy-loaded PDF dependencies (only imported when user clicks "Download PDF"). */
+async function loadPdfDeps() {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("html2canvas-pro"),
+    import("jspdf"),
+  ]);
+  return { html2canvas, jsPDF };
+}
 
 interface SessionSummaryModalProps {
   summary: string | null;
@@ -168,11 +177,126 @@ function downloadMarkdown(content: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Shared PDF builder: captures the rendered summary as a multi-page JPEG-based PDF.
+ * Uses html2canvas-pro to rasterize the DOM (including rendered Mermaid SVGs)
+ * and jsPDF to assemble pages with per-page canvas slicing for small file size.
+ */
+async function buildPdf(element: HTMLDivElement) {
+  const { html2canvas, jsPDF } = await loadPdfDeps();
+
+  /* Temporarily expand the element so html2canvas captures full scrollable content */
+  const origHeight = element.style.height;
+  const origOverflow = element.style.overflow;
+  const origMaxHeight = element.style.maxHeight;
+  const origFlex = element.style.flex;
+  element.style.height = "auto";
+  element.style.overflow = "visible";
+  element.style.maxHeight = "none";
+  element.style.flex = "none";
+
+  try {
+    const canvas = await html2canvas(element, {
+      scale: 1.5,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#1a1a2e",
+    });
+
+    /* A4 dimensions in mm */
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 10;
+    const contentW = pageW - margin * 2;
+    const contentH = pageH - margin * 2;
+
+    /* How many canvas pixels correspond to one PDF content-area page */
+    const pxPerMm = canvas.width / contentW;
+    const pxPageHeight = Math.floor(contentH * pxPerMm);
+    const totalHeight = canvas.height;
+    const nPages = Math.ceil(totalHeight / pxPageHeight);
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    /* Per-page canvas slicing: extract one page-sized strip at a time and encode as JPEG */
+    const pageCanvas = document.createElement("canvas");
+    const pageCtx = pageCanvas.getContext("2d")!;
+    pageCanvas.width = canvas.width;
+
+    for (let page = 0; page < nPages; page++) {
+      const sliceHeight = Math.min(
+        pxPageHeight,
+        totalHeight - page * pxPageHeight,
+      );
+      pageCanvas.height = sliceHeight;
+
+      /* Fill with background colour to avoid white flash on the final (partial) page */
+      pageCtx.fillStyle = "#1a1a2e";
+      pageCtx.fillRect(0, 0, pageCanvas.width, sliceHeight);
+
+      pageCtx.drawImage(
+        canvas,
+        0,
+        page * pxPageHeight,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight,
+      );
+
+      if (page > 0) pdf.addPage();
+
+      const imgData = pageCanvas.toDataURL("image/jpeg", 0.8);
+      const actualPageH = (sliceHeight / canvas.width) * contentW;
+      pdf.addImage(imgData, "JPEG", margin, margin, contentW, actualPageH);
+    }
+
+    return pdf;
+  } finally {
+    /* Restore original styles */
+    element.style.height = origHeight;
+    element.style.overflow = origOverflow;
+    element.style.maxHeight = origMaxHeight;
+    element.style.flex = origFlex;
+  }
+}
+
+/** Download the rendered summary as a multi-page PDF. */
+async function downloadPdf(element: HTMLDivElement) {
+  const pdf = await buildPdf(element);
+  pdf.save(`ads-session-summary-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+/**
+ * Generate PDF as base64 string (for email attachment).
+ * Reuses the same buildPdf pipeline as downloadPdf.
+ */
+async function generatePdfBase64(element: HTMLDivElement): Promise<string> {
+  const pdf = await buildPdf(element);
+  /* pdf.output('datauristring') returns 'data:application/pdf;base64,...' */
+  const dataUri = pdf.output("datauristring");
+  return dataUri.split(",")[1];
+}
+
 export function SessionSummaryModal({
   summary,
   isGenerating,
   onDismiss,
 }: SessionSummaryModalProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [isEmailSending, setIsEmailSending] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sent" | "error">("idle");
+
   /* Close on Escape key */
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -185,6 +309,47 @@ export function SessionSummaryModal({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!contentRef.current || isPdfGenerating) return;
+    setIsPdfGenerating(true);
+    try {
+      await downloadPdf(contentRef.current);
+    } finally {
+      setIsPdfGenerating(false);
+    }
+  }, [isPdfGenerating]);
+
+  const handleSendEmail = useCallback(async () => {
+    if (!contentRef.current || !emailAddress.trim() || isEmailSending) return;
+    setIsEmailSending(true);
+    setEmailStatus("idle");
+    try {
+      const pdfBase64 = await generatePdfBase64(contentRef.current);
+      const date = new Date().toISOString().slice(0, 10);
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailAddress.trim(),
+          subject: `ADS Session Summary — ${date}`,
+          body: "<p>Please find your ADS session summary attached as a PDF.</p>",
+          pdf_base64: pdfBase64,
+          pdf_filename: `ads-session-summary-${date}.pdf`,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setEmailStatus("sent");
+    } catch (err) {
+      console.error("Failed to send email:", err);
+      setEmailStatus("error");
+    } finally {
+      setIsEmailSending(false);
+    }
+  }, [emailAddress, isEmailSending]);
 
   const content = summary || "";
 
@@ -227,31 +392,6 @@ export function SessionSummaryModal({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Download button — only when summary is available */}
-            {content && !isGenerating && (
-              <button
-                type="button"
-                onClick={() => downloadMarkdown(content)}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
-                title="Download as Markdown"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-3.5 h-3.5"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download .md
-              </button>
-            )}
             {/* Close button */}
             <button
               type="button"
@@ -278,7 +418,7 @@ export function SessionSummaryModal({
         </div>
 
         {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
           {!content && isGenerating ? (
             /* Initial loading state before any text arrives */
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -307,35 +447,112 @@ export function SessionSummaryModal({
 
         {/* Footer — only visible when summary is complete */}
         {content && !isGenerating && (
-          <div className="flex items-center justify-end gap-3 px-6 py-3 border-t border-[var(--border)] shrink-0">
-            <button
-              type="button"
-              onClick={() => downloadMarkdown(content)}
-              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-4 h-4"
+          <div className="px-6 py-3 border-t border-[var(--border)] shrink-0 space-y-3">
+            {/* Email form */}
+            {showEmailForm ? (
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-[var(--muted)] shrink-0">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                </svg>
+                <input
+                  type="email"
+                  placeholder="recipient@example.com"
+                  value={emailAddress}
+                  onChange={(e) => { setEmailAddress(e.target.value); setEmailStatus("idle"); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
+                  disabled={isEmailSending}
+                  className="flex-1 text-sm px-3 py-1.5 rounded-lg bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] placeholder:text-[var(--muted)] disabled:opacity-50"
+                  aria-label="Recipient email address"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendEmail}
+                  disabled={isEmailSending || !emailAddress.trim()}
+                  className="inline-flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isEmailSending ? (
+                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  )}
+                  Send
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowEmailForm(false); setEmailStatus("idle"); }}
+                  className="text-sm px-2 py-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                  aria-label="Cancel email"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ) : null}
+            {/* Email status messages */}
+            {emailStatus === "sent" && (
+              <p className="text-xs text-green-400">✓ Email sent successfully to {emailAddress}</p>
+            )}
+            {emailStatus === "error" && (
+              <p className="text-xs text-red-400">Failed to send email. Please check the address and try again.</p>
+            )}
+            {/* Action buttons */}
+            <div className="flex items-center justify-end gap-3">
+              {!showEmailForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowEmailForm(true)}
+                  className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                  Email PDF
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => downloadMarkdown(content)}
+                className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download as Markdown
-            </button>
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="text-sm px-4 py-2 rounded-lg bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
-            >
-              Close
-            </button>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download .md
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isPdfGenerating}
+                className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-wait"
+              >
+                {isPdfGenerating ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                )}
+                Download .pdf
+              </button>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="text-sm px-4 py-2 rounded-lg bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)] border border-[var(--border)] transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
       </div>

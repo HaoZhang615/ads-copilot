@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
-from copilot import CopilotClient, CopilotSession, SessionEvent
+from copilot import CopilotClient, CopilotSession, PermissionHandler, SessionEvent
 from copilot.types import MCPRemoteServerConfig
 
 from app.backend.config import settings
@@ -233,6 +233,7 @@ class CopilotAgent:
             "skill_directories": _SKILL_DIRECTORIES,
             "system_message": {"content": _SYSTEM_PROMPT},
             "mcp_servers": _MCP_SERVERS,
+            "on_permission_request": PermissionHandler.approve_all,
         })
 
         # Warm-up: send a hidden message to force skill loading so the

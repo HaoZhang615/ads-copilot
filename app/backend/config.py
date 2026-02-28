@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     session_ttl_seconds: int = 3600
     max_sessions_per_user: int = 5
+    logic_app_trigger_url: str = ""
 
 
 settings = Settings()

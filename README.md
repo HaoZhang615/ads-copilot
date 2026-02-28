@@ -31,6 +31,8 @@ Ships with an Azure Databricks domain skill out of the box. The pluggable skill 
 | 🧑‍💼 | Talking avatar | Azure Speech Avatar rendered via WebRTC |
 | 💬 | Lite conversation mode | Text-only toggle — no voice or avatar required |
 | 📊 | Live Mermaid diagram generation | 8 architecture patterns, rendered in browser |
+| 📄 | Session summary export | Download as Markdown or optimized PDF (JPEG-compressed, ~2-4 MB) with rendered diagrams |
+| 📧 | Email session summary | Send PDF summary via email (with automatic BCC) using Azure Logic App + Outlook |
 | 🔌 | Pluggable domain skills | Swap knowledge domains without code changes |
 | 🔍 | MCP server integration | Microsoft Learn real-time docs lookup |
 | 🏗️ | GitHub Copilot SDK backend | Agent loop with structured tool calls |
@@ -134,7 +136,9 @@ azd auth login
 azd up
 ```
 
-This provisions: Azure Container Apps (backend + frontend), Azure AI Services, Azure Speech Service, Azure Key Vault, Azure Container Registry, and Log Analytics workspace. Secrets are injected at deploy time — no manual Key Vault configuration required.
+This provisions: Azure Container Apps (backend + frontend), Azure AI Services, Azure Speech Service, Azure Key Vault, Azure Container Registry, Azure Logic App (email), and Log Analytics workspace. Secrets are injected at deploy time — no manual Key Vault configuration required.
+
+> **Email setup (one-time):** After `azd up`, the Logic App's Office 365 Outlook API connection needs manual OAuth consent. In the Azure Portal, navigate to the deployed API Connection resource → Edit API connection → Authorize → Save. This grants the Logic App permission to send emails on behalf of the authorized account.
 
 ## Pluggable Skills
 

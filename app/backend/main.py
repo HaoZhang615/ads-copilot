@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.backend.config import settings
-from app.backend.routers import health, ws
+from app.backend.routers import email, health, ws
 from app.backend.services.session_manager import session_manager
 
 logging.basicConfig(
@@ -41,6 +41,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(ws.router)
+app.include_router(email.router)
 
 if __name__ == "__main__":
     import uvicorn
