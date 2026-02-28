@@ -4,38 +4,24 @@
 
 ## Repository Overview
 
-**ADS Copilot** is a voice-enabled AI copilot for Architecture Design Sessions. It is a full-stack application with a FastAPI/WebSocket backend and a Next.js 15 frontend, powered by the GitHub Copilot SDK, Azure VoiceLive (real-time STT), Azure Speech (TTS + talking avatar), and MCP server integrations.
+**ADS Copilot** — voice-enabled AI copilot for Architecture Design Sessions. FastAPI/WebSocket backend + Next.js 15 frontend. Ships with two domain skills: Azure Databricks and Microsoft Fabric.
 
-The repo contains:
-
-- **Backend** (`app/backend/`) — FastAPI server with WebSocket endpoint, Copilot agent, VoiceLive STT, Speech TTS, and Avatar services
-- **Frontend** (`app/frontend/`) — Next.js 15 / React 19 / Tailwind CSS 4 SPA with landing page (topic selection), per-topic conversation UI, voice capture, WebRTC avatar, and Mermaid diagram rendering
-- **Pluggable domain skills** (`skills/`) — Two domain skills:
-  - `skills/databricks-ads-session/` — Azure Databricks knowledge: SKILL.md manifest, 8 reference documents, Mermaid diagram generator script
-  - `skills/fabric-ads-session/` — Microsoft Fabric knowledge: SKILL.md manifest, 8 reference documents, Mermaid diagram generator script
-- **Mirror skills** (`.github/skills/`) — Duplicates for GitHub Copilot skill discovery (must stay in sync with `skills/` directory)
-- **Infrastructure** (`infra/`) — Azure Bicep IaC for Container Apps, AI Services, Speech, Key Vault, Container Registry
-- **Docker Compose** (`app/docker-compose.yml`) — Local dev stack
-
-**Repo URL**: `https://github.com/HaoZhang615/ads-copilot`
-**Default branch**: `voicelive-app`
+- **Backend**: `app/backend/` — FastAPI, async/await, Copilot SDK agent, WebSocket endpoint
+- **Frontend**: `app/frontend/` — Next.js 15 / React 19 / Tailwind CSS 4, App Router
+- **Skills**: `skills/databricks-ads-session/`, `skills/fabric-ads-session/` — domain knowledge + Mermaid generators
+- **Mirror skills**: `.github/skills/` — duplicates for GitHub Copilot discovery (**must stay in sync**)
+- **Infra**: `infra/` — Azure Bicep IaC
 
 ## Build / Lint / Test Commands
 
-There is **no linter, formatter, or automated test framework** configured. Validation is manual.
+**No linter, formatter, or test framework is configured.** Validation is manual.
 
 ### Backend
 
 ```bash
-# Install dependencies
-cd app/backend
-pip install -r requirements.txt
-
-# Run dev server (from repo root)
-python -m uvicorn app.backend.main:app --reload
-
-# Validate Python files compile
-python -c "import py_compile; py_compile.compile('app/backend/main.py', doraise=True)"
+cd app/backend && pip install -r requirements.txt          # Install
+python -m uvicorn app.backend.main:app --reload            # Dev server (from repo root)
+python -c "import py_compile; py_compile.compile('app/backend/main.py', doraise=True)"  # Compile check
 ```
 
 ### Frontend
@@ -43,318 +29,95 @@ python -c "import py_compile; py_compile.compile('app/backend/main.py', doraise=
 ```bash
 cd app/frontend
 npm install
-npm run dev       # Dev server on http://localhost:3000
+npm run dev       # Dev server on :3000
 npm run build     # Production build (validates TypeScript + Next.js)
 ```
 
-### Docker Compose
+### Docker / Azure
 
 ```bash
-cp .env.sample .env
-# Edit .env with Azure credentials
-cd app
-docker compose up --build
+cp .env.sample .env && cd app && docker compose up --build   # Local stack
+azd auth login && azd up                                      # Azure deployment
 ```
 
-### Azure Deployment
+### Diagram Generator (Skill Scripts)
 
 ```bash
-azd auth login
-azd up
-```
-
-### Mermaid Diagram Generator (Skill Script)
-
-```bash
-# List available architecture patterns (Databricks)
-python skills/databricks-ads-session/scripts/generate_architecture.py --list
-
-# Generate a specific pattern to stdout
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion
-
-# Generate with custom params
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform --params '{"include_monitoring": true}'
-
-# Render to PNG (requires Node.js / npx)
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion --render --filename my_diagram
-
-# Fabric skill patterns
-python skills/fabric-ads-session/scripts/generate_architecture.py --list
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern lakehouse
+python skills/databricks-ads-session/scripts/generate_architecture.py --list              # List patterns
+python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion  # Generate one
+python skills/fabric-ads-session/scripts/generate_architecture.py --list                   # Fabric patterns
 ```
 
 ### Smoke Tests (Manual)
 
 ```bash
-# Backend compiles
-python -c "import app.backend.main"
+python -c "import app.backend.main"                          # Backend compiles
+cd app/frontend && npm run build                             # Frontend builds
 
-# Databricks skill — all 8 diagram patterns generate without errors
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern medallion
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern streaming
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern ml-platform
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern data-mesh
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern migration
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern dwh-replacement
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern iot
-python skills/databricks-ads-session/scripts/generate_architecture.py --pattern hybrid
+# All 8 Databricks patterns
+for p in medallion streaming ml-platform data-mesh migration dwh-replacement iot hybrid; do
+  python skills/databricks-ads-session/scripts/generate_architecture.py --pattern $p
+done
 
-# Fabric skill — all 8 diagram patterns generate without errors
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern lakehouse
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern warehouse
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern realtime
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern data-mesh
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern migration
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern dwh-replacement
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern iot
-python skills/fabric-ads-session/scripts/generate_architecture.py --pattern hybrid
-
-# Frontend builds
-cd app/frontend && npm run build
+# All 8 Fabric patterns
+for p in lakehouse warehouse realtime data-mesh migration dwh-replacement iot hybrid; do
+  python skills/fabric-ads-session/scripts/generate_architecture.py --pattern $p
+done
 ```
 
 ## Code Style Guidelines
 
 ### Python (Backend — `app/backend/`)
 
-- **Python version**: 3.11+ (pinned in `pyproject.toml`)
-- **Framework**: FastAPI with async/await throughout
-- **Imports**: Third-party grouped after stdlib, alphabetically ordered within groups
-- **Type hints**: Use `pydantic` models for structured data. Function signatures should have type annotations.
-- **Configuration**: `pydantic_settings.BaseSettings` in `config.py`, loaded from `.env`
-- **Naming**:
-  - Functions/methods: `snake_case`
-  - Classes: `PascalCase`
-  - Constants: `UPPER_SNAKE_CASE`
-  - Module-level compiled regexes: `_UPPER_SNAKE_CASE` with leading underscore (e.g., `_SOURCE_CITATION_RE`)
-- **Async patterns**: All I/O operations use `async`/`await`. WebSocket handlers are async generators.
-- **Error handling**: Errors printed to `logger.error()`; services use try/except with specific exception types. Never bare `except:`.
-- **No linter or formatter** is configured — maintain consistency with existing style.
-- **Dependencies**: Listed in `requirements.txt` (runtime) and `pyproject.toml`. Do not add new dependencies without discussion.
+- **Python 3.11+**, FastAPI with `async`/`await` throughout
+- **Imports**: stdlib → third-party → local (`app.backend.*`), grouped with blank lines, alphabetical within groups
+- **Type hints**: Pydantic models for structured data. Function signatures must have type annotations.
+- **Config**: `pydantic_settings.BaseSettings` in `config.py`, loaded from `.env`
+- **Naming**: `snake_case` functions, `PascalCase` classes, `UPPER_SNAKE_CASE` constants, `_UPPER_SNAKE_CASE` module-level compiled regexes
+- **Async**: All I/O uses `async`/`await`. WebSocket handlers are async generators.
+- **Errors**: `logger.error()` for logging. `try`/`except` with specific exception types. Never bare `except:`.
+- **No linter configured** — maintain consistency with existing files.
+- **Dependencies**: `requirements.txt` (runtime) + `pyproject.toml`. No new deps without discussion.
 
 ### Python (Diagram Scripts — `skills/*/scripts/generate_architecture.py`)
 
-- **Stdlib only** — no pip packages. Uses `argparse`, `json`, `os`, `subprocess`, `sys`, `textwrap`, `typing`.
-- **Purely functional** — no classes, registry dict `PATTERNS` maps pattern names to generators.
-- **Pattern generators**: `generate_<pattern_name>(params: Dict[str, Any]) -> str`
-- **String formatting**: f-strings with `textwrap.dedent()` for multiline Mermaid output.
+- **Stdlib only** — no pip packages (`argparse`, `json`, `os`, `subprocess`, `sys`, `textwrap`, `typing`)
+- **Purely functional** — no classes. `PATTERNS` dict maps names to generators.
+- **Generator signature**: `generate_<name>(params: Dict[str, Any]) -> str`
+- **Strings**: f-strings with `textwrap.dedent()` for multiline Mermaid output.
 
 ### TypeScript / React (Frontend — `app/frontend/`)
 
-- **TypeScript strict mode**: No `any` types, no `@ts-ignore`, no `@ts-expect-error`
-- **React 19**: Functional components with hooks. No class components.
-- **Next.js 15**: App Router (`app/` directory). API routes under `src/app/api/`.
-- **Tailwind CSS 4**: Utility-first styling. No separate CSS modules.
-- **Naming**:
-  - Components: `PascalCase` files and exports (e.g., `ChatInterface.tsx`)
-  - Hooks: `useCamelCase` prefix (e.g., `useVoiceSession.ts`)
-  - Lib/utilities: `kebab-case` files (e.g., `ws-protocol.ts`)
-- **State management**: React hooks + refs. No external state library.
-- **Performance**: Use `React.memo` for components that receive frequently-changing parent props (e.g., `audioLevel`). Extract callback refs to module-level when possible for stable references.
-- **Accessibility**: Interactive elements need `role`, `aria-*` attributes (see `LiteModeToggle` for reference).
+- **TypeScript strict mode**: No `any`, no `@ts-ignore`, no `@ts-expect-error`
+- **React 19**: Functional components + hooks only. No class components.
+- **Next.js 15 App Router**: Pages under `src/app/`, API routes under `src/app/api/`
+- **Tailwind CSS 4**: Utility-first. No CSS modules.
+- **Naming**: `PascalCase` components, `useCamelCase` hooks, `kebab-case` lib files
+- **State**: React hooks + refs. No external state library.
+- **Performance**: `React.memo` for components receiving frequently-changing props (e.g. `audioLevel`)
+- **Accessibility**: Interactive elements need `role`, `aria-*` attributes
 
-### Markdown (Skill & Reference Documents)
+### Markdown (Skill & Reference Docs)
 
-- **Headings**: ATX-style (`#`, `##`, `###`). H1 for document title, H2 for major sections.
-- **Tables**: Pipe-delimited Markdown tables. Align columns for readability.
-- **Code blocks**: Fenced with triple backticks. Use language identifiers (`python`, `bash`, `mermaid`).
-- **Links**: Relative paths from the document's location (e.g., `[references/foo.md](references/foo.md)`)
-- **Lists**: Unordered (`-`) for items. Numbered lists for sequential steps.
-- **Front matter**: YAML front matter in SKILL.md with `name`, `description`, `license`, `compatibility`, `metadata`
-- **Tone**: Solutions architect voice — professional, concise, opinionated. Not academic.
+- ATX headings (`#`/`##`/`###`). Fenced code blocks with language identifiers.
+- Pipe-delimited tables. Relative links. Solutions architect tone — professional, concise, opinionated.
 
-### Mermaid Diagrams (`.mmd` files)
+### Mermaid Diagrams
 
-- **Direction**: `flowchart LR` for most patterns; `flowchart TB` for data mesh and ML platform
-- **Node shapes by Azure component type**:
-  - Compute/Processing: `[Name]` (rectangle)
-  - Storage: `[(Name)]` (cylinder)
-  - Security/Identity: `(Name)` (rounded)
-  - Networking: `{{Name}}` (hexagon) or `([Name])` (stadium)
-  - External Systems: `[[Name]]` (double-bordered rectangle)
-- **Arrow styles**:
-  - `-->` data flow
-  - `-.->` governance / security
-  - `==>` primary migration paths
-- **Edge labels**: `-->|label|` for clarity (e.g., `-->|batch|`, `-.->|governs|`)
-- **Subgraphs**: Always named with quoted labels (e.g., `subgraph SEC["Security & Identity"]`)
-- **Indentation**: 2 spaces within subgraphs
+- `flowchart LR` (most patterns) or `flowchart TB` (data mesh, ML platform)
+- Node shapes: `[Compute]`, `[(Storage)]`, `(Security)`, `{{Networking}}`, `[[External]]`
+- Arrows: `-->` data flow, `-.->` governance, `==>` migration paths. Labels via `-->|label|`
+- Subgraphs with quoted labels: `subgraph SEC["Security & Identity"]`. 2-space indent.
 
-## File Structure
+## Critical Sync Rules
 
-```
-├── app/
-│   ├── backend/                        # FastAPI + WebSocket server
-│   │   ├── main.py                     # App entry point, lifespan, CORS
-│   │   ├── config.py                   # pydantic_settings config from .env
-│   │   ├── services/
-│   │   │   ├── copilot_agent.py        # GitHub Copilot SDK agent + system prompt
-│   │   │   ├── session_manager.py      # Session lifecycle, lite mode + skill support
-│   │   │   ├── voicelive_service.py    # Azure VoiceLive real-time STT
-│   │   │   ├── speech_tts_service.py   # Azure Speech TTS
-│   │   │   ├── avatar_tts_service.py   # Azure Speech Avatar (WebRTC)
-│   │   │   └── audio_utils.py          # Audio format conversion utilities
-│   │   ├── routers/
-│   │   │   ├── ws.py                   # WebSocket endpoint (main orchestrator)
-│   │   │   └── health.py              # Health check endpoint
-│   │   ├── models/
-│   │   │   ├── ws_messages.py          # WebSocket message Pydantic models
-│   │   │   └── session_state.py        # Session state enum/models
-│   │   ├── requirements.txt
-│   │   ├── pyproject.toml
-│   │   └── Dockerfile
-│   ├── frontend/                       # Next.js 15 + React 19
-│   │   ├── src/
-│   │   │   ├── app/                    # Next.js App Router pages
-│   │   │   │   ├── layout.tsx
-│   │   │   │   ├── page.tsx            # Landing page (topic selection)
-│   │   │   │   ├── globals.css
-│   │   │   │   ├── session/
-│   │   │   │   │   └── [topic]/
-│   │   │   │   │       └── page.tsx    # Dynamic conversation route
-│   │   │   │   └── api/               # API routes (config, email)
-│   │   │   ├── components/
-│   │   │   │   ├── ChatInterface.tsx   # Main chat UI (topic-aware) + LiteModeToggle
-│   │   │   │   ├── MessageBubble.tsx   # Message rendering + Mermaid (React.memo)
-│   │   │   │   ├── MermaidDiagram.tsx  # Mermaid diagram renderer
-│   │   │   │   ├── AvatarPanel.tsx     # WebRTC avatar video panel
-│   │   │   │   ├── VoiceButton.tsx     # Mic toggle button
-│   │   │   │   ├── TextInput.tsx       # Text input for lite mode
-│   │   │   │   └── WaveformVisualizer.tsx  # Audio level visualizer
-│   │   │   ├── hooks/
-│   │   │   │   ├── useVoiceSession.ts  # Core session hook (WS, lite mode, skill, state)
-│   │   │   │   ├── useAudioCapture.ts  # Microphone capture hook
-│   │   │   │   ├── useAudioPlayback.ts # TTS audio playback hook
-│   │   │   │   └── useWebRTC.ts        # Avatar WebRTC connection hook
-│   │   │   └── lib/
-│   │   │       ├── ws-protocol.ts      # WebSocket message types
-│   │   │       └── audio-worklet.ts    # AudioWorklet for audio processing
-│   │   ├── Dockerfile
-│   │   └── package.json
-│   └── docker-compose.yml
-├── skills/                             # Pluggable domain skills
-│   ├── databricks-ads-session/         # Azure Databricks domain
-│   │   ├── SKILL.md                    # Skill manifest v3.0
-│   │   ├── references/
-│   │   │   ├── conversation-framework.md   # Phase execution details & transitions
-│   │   │   ├── databricks-patterns.md      # Architecture pattern catalog (8 patterns)
-│   │   │   ├── industry-templates.md       # Industry-specific question banks
-│   │   │   ├── migration-patterns.md       # Source-system migration mappings
-│   │   │   ├── probing-questions.md        # Deep-dive question banks for vague answers
-│   │   │   ├── readiness-checklist.md      # Info completeness scoring before diagram gen
-│   │   │   ├── technical-deep-dives.md     # Technical spike playbooks
-│   │   │   └── trade-offs-and-failure-modes.md  # Trade-off tables + failure playbooks
-│   │   └── scripts/
-│   │       └── generate_architecture.py    # CLI Mermaid diagram generator
-│   └── fabric-ads-session/             # Microsoft Fabric domain
-│       ├── SKILL.md                    # Skill manifest v1.0
-│       ├── references/
-│       │   ├── conversation-framework.md   # Phase execution details & transitions
-│       │   ├── fabric-patterns.md          # Architecture pattern catalog (8 patterns)
-│       │   ├── industry-templates.md       # Industry-specific question banks
-│       │   ├── migration-patterns.md       # Source-system migration mappings
-│       │   ├── probing-questions.md        # Deep-dive question banks for vague answers
-│       │   ├── readiness-checklist.md      # Info completeness scoring before diagram gen
-│       │   ├── technical-deep-dives.md     # Technical spike playbooks
-│       │   └── trade-offs-and-failure-modes.md  # Trade-off tables + failure playbooks
-│       └── scripts/
-│           └── generate_architecture.py    # CLI Mermaid diagram generator
-├── .github/
-│   ├── skills/                         # Mirrors of skills/ for GitHub Copilot discovery
-│   │   ├── databricks-ads-session/
-│   │   └── fabric-ads-session/
-│   ├── ISSUE_TEMPLATE/                 # Bug report + feature request templates
-│   └── PULL_REQUEST_TEMPLATE.md
-├── infra/                              # Azure Bicep IaC
-│   ├── main.bicep
-│   ├── main.json                       # ARM template (compiled from Bicep)
-│   ├── main.parameters.json
-│   └── modules/                        # Bicep modules
-├── docs/                               # Demo screenshots
-├── .env.sample                         # Environment variable template
-├── azure.yaml                          # azd configuration
-├── README.md                           # Project README (branded "ADS Copilot")
-├── LICENSE                             # MIT
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-└── AGENTS.md                           # This file
-```
+1. **WebSocket protocol** — `app/backend/models/ws_messages.py` (Pydantic) ↔ `app/frontend/src/lib/ws-protocol.ts` (TypeScript) must always match. Update both sides together.
 
-## Key Architecture Decisions
+2. **Skill mirrors** — After modifying `skills/`, mirror to `.github/skills/`:
+   - `.github/skills/<name>/` (flat) + `.github/skills/<name>/<name>/` (nested)
 
-1. **Pluggable skill architecture**: Domain knowledge lives in `skills/` subdirectories. Each skill has a `SKILL.md` manifest + `references/` docs. The ADS methodology (conversation phases, probing strategies, trade-off evaluation) lives in the backend system prompt (`copilot_agent.py`) and is domain-agnostic. The backend's `_SKILL_DIRECTORIES` dict in `copilot_agent.py` maps skill names to directory paths. To add a new domain, create a new skill directory under `skills/` and register it in the dict.
+3. **Lite mode guards** — Voice/avatar features must be guarded behind `liteMode` checks in frontend components.
 
-2. **Multi-topic frontend**: The landing page (`/`) lets users choose a topic (Databricks or Fabric). The conversation UI at `/session/[topic]` loads the `ChatInterface` component with per-topic branding via CSS custom properties (`data-topic` attribute). The `useVoiceSession` hook passes `skill=<topic>` as a WebSocket query parameter to select the backend skill.
+4. **Skill routing** — Register new skills in `_SKILL_DIRECTORIES` dict in `copilot_agent.py`, add topic card in `page.tsx`, add `TOPIC_CONFIG` entry in `ChatInterface.tsx`, add CSS theme in `globals.css` under `[data-topic="<name>"]`.
 
-3. **Dual skill location**: Skills are duplicated under `.github/skills/` for GitHub Copilot discovery AND under `skills/` for the backend agent. **Always keep both in sync.** The `.github/skills/` path contains a nested duplicate — note the double directory: `.github/skills/databricks-ads-session/databricks-ads-session/`.
-
-4. **WebSocket-first architecture**: The backend exposes a single WebSocket endpoint (`/ws`) that orchestrates all services. Audio, text, agent responses, avatar ICE candidates, and session state all flow through this one connection. The frontend connects once and multiplexes message types via a typed protocol (`ws-protocol.ts` ↔ `ws_messages.py`). The `skill` query parameter (`?skill=databricks` or `?skill=fabric`) selects which domain skill to load.
-
-4. **Lite conversation mode**: The UI has a toggle that disables avatar, STT, and TTS. When lite mode is active, `?lite=1` is appended to the WebSocket URL. The backend creates the session without voice/avatar services. Toggling requires a WebSocket reconnection (conversation messages are preserved client-side).
-
-5. **TTS text stripping**: Before sending text to Azure Speech TTS, the backend runs a layered regex pipeline (`_strip_for_tts` in `ws.py`) that removes code blocks, source citations, bare URLs, and Markdown emphasis markers. This prevents the avatar from reading out URLs, asterisks, and code.
-
-6. **Multi-turn tool-call handling**: The Copilot SDK emits multiple `turn_end` events when MCP tools are called (one after tool execution, one after the synthesis response). The agent's event handler (`copilot_agent.py`) tracks `_turn_had_tool_calls` and only emits the stream-done signal after the final synthesis turn.
-
-7. **Avatar connection reuse**: The Azure Speech Avatar stays connected across conversation turns to avoid 4429 throttling from rapid connect/disconnect cycles. Retry with exponential backoff handles transient throttling.
-
-8. **Mermaid as diagram format**: All architecture diagrams use Mermaid syntax, rendered client-side in `MermaidDiagram.tsx`. The diagram generator script produces 8 named patterns (medallion, streaming, ml-platform, data-mesh, migration, dwh-replacement, iot, hybrid) with parameterized generators.
-
-9. **No new dependencies without discussion**: Backend uses only the packages in `requirements.txt`. The diagram generator script uses only Python stdlib. Frontend dependencies are managed via `package.json`.
-
-## Common Tasks
-
-### Adding a New Domain Skill
-
-1. Create a directory: `skills/<domain>-ads-session/`
-2. Add a `SKILL.md` manifest following the structure in `skills/databricks-ads-session/SKILL.md`
-3. Add `references/` docs with architecture patterns, question banks, and migration playbooks
-4. (Optional) Add `scripts/generate_architecture.py` for Mermaid diagram generation
-5. Register the skill in `app/backend/services/copilot_agent.py` `_SKILL_DIRECTORIES` dict
-6. Add a topic card to `app/frontend/src/app/page.tsx` and an entry in `ChatInterface.tsx`'s `TOPIC_CONFIG`
-7. Add CSS theme variables in `globals.css` under a `[data-topic="<domain>"]` selector
-8. Mirror to `.github/skills/<domain>-ads-session/` if GitHub Copilot discovery is needed
-### Adding a New Architecture Pattern (to an existing skill)
-
-1. Add a `generate_<name>(params: Dict[str, Any]) -> str` function in `skills/<domain>-ads-session/scripts/generate_architecture.py`
-2. Register it in the `PATTERNS` dict with `fn`, `desc`, and `params` keys
-3. Add a corresponding section in `references/<domain>-patterns.md`
-4. Update the decision tree at the top of `<domain>-patterns.md`
-### Editing Reference Documents
-
-- Keep the solutions-architect tone
-- Include actionable questions, not abstract guidance
-- Use tables for structured comparisons
-- Add "Red Flags" and "Anti-patterns" sections where applicable
-- Cross-reference other docs with relative links
-
-### Syncing `.github/skills/` with `skills/`
-
-After modifying files under `skills/`, mirror changes to `.github/skills/`:
-- `.github/skills/databricks-ads-session/` (flat mirror)
-- `.github/skills/databricks-ads-session/databricks-ads-session/` (nested mirror)
-- `.github/skills/fabric-ads-session/` (flat mirror)
-- `.github/skills/fabric-ads-session/fabric-ads-session/` (nested mirror)
-
-### Adding a Backend Service
-
-1. Create `app/backend/services/<service_name>.py`
-2. Add Pydantic models to `app/backend/models/` if needed
-3. Integrate into the session lifecycle in `session_manager.py`
-4. Wire into the WebSocket router in `routers/ws.py`
-5. Add any new config fields to `config.py` (with `.env.sample` defaults)
-
-### Adding a Frontend Component
-
-1. Create `app/frontend/src/components/<ComponentName>.tsx`
-2. Use `React.memo` if the component receives frequently-changing props
-3. Add hooks to `app/frontend/src/hooks/` for reusable stateful logic
-4. Update `ws-protocol.ts` if new WebSocket message types are needed
-5. Respect lite mode — guard voice/avatar features behind `liteMode` checks
-
-### Modifying the WebSocket Protocol
-
-Both sides must stay in sync:
-- **Backend**: `app/backend/models/ws_messages.py` (Pydantic models) + `app/backend/routers/ws.py` (handlers)
-- **Frontend**: `app/frontend/src/lib/ws-protocol.ts` (TypeScript types) + `app/frontend/src/hooks/useVoiceSession.ts` (handlers)
+5. **No new dependencies** without discussion. Diagram scripts use stdlib only.
